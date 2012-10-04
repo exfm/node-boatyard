@@ -4,7 +4,16 @@ var util = require('util'),
     mongo = require('mongodb'),
     sequence = require('sequence'),
     when = require('when'),
-    dgram  = require('dgram');
+    dgram  = require('dgram'),
+    winston = require('winston');
+
+winston.loggers.add('shipyard', {
+    console: {
+        'level': 'silly', 'timestamp': true, 'colorize': true
+    }
+});
+
+var log = winston.loggers.get('shipyard');
 
 var PARTITION_STATE = {
     'AVAILABLE': 0,
@@ -17,9 +26,6 @@ function Partition(id, start, stop){
     this.id = id;
     this.start = start;
     this.stop = stop;
-
-    this.mateId = null;
-    this.workerId = null;
     this.state = PARTITION_STATE.AVAILABLE;
 }
 util.inherits(Partition, EventEmitter);
@@ -72,6 +78,7 @@ Captain.prototype.getRandomMongoHost = function(){
 
 Captain.prototype.startShip = function(){
     // How many things do we need to chew through?
+    log.silly('Starting ship....');
     this.db = new mongo.Db(this.dbName,
         new mongo.Server(this.mongoHosts[0], 27017, {}),
         {'native_parser':true, 'slave_ok': true});
@@ -91,7 +98,7 @@ Captain.prototype.startShip = function(){
                 i*this.partitionSize, (i*this.partitionSize) + this.partitionSize);
             this.availablePartitions.push(i);
         }
-        console.log('Partitions: ', this.partitions);
+        log.silly('Determined Partitions: ', this.partitions);
         this.startServer();
     });
 };
@@ -100,7 +107,7 @@ Captain.prototype.startServer = function(){
     this.server = dgram.createSocket('udp4', function (msg, rinfo) {
         msg = msg.toString();
 
-        console.log('Got message', msg, rinfo);
+        log.info('Got message: ' + msg, rinfo);
         var workerAddress = rinfo.address,
             data = [],
             partitionId = -1,
@@ -118,16 +125,20 @@ Captain.prototype.startServer = function(){
 
             data = /FEEDME\|([\w\.]+)\|(\d+)/.exec(msg);
             var mateId = data[1],
-                workerId = data[2];
+                handId = data[2];
 
             if(this.availablePartitions.length){
                 partitionId = this.availablePartitions.shift();
                 partition = this.partitions[partitionId];
-                message = new Buffer("EAT|"+mateId+"-"+workerId+"|" + partitionId+"|" + partition.start + "-" + partition.stop);
+
+                log.info(util.format('Giving partition %s to hand %s on mate %s',
+                    partition, handId, mateId));
+
+                message = new Buffer("EAT|"+mateId+"-"+handId+"|" + partitionId+"|" + partition.start + "-" + partition.stop);
             }
             else{
-                message = new Buffer("EMPTY|"+mateId + "-" + workerId);
-                console.log("EMPTTYTYYYYYYYYYYYYYYYYYYY");
+                message = new Buffer("EMPTY|"+mateId + "-" + handId);
+                log.info('Available partitions empty.  Sending empty to kill hand ' + handId + ' on mate ' + mateId);
             }
             client.send(message, 0, message.length, 9001, rinfo.address, function(err, bytes) {
                 client.close();
@@ -157,11 +168,11 @@ Captain.prototype.startServer = function(){
             this.partitions[partitionId].error(statusMessage);
         }
         else{
-            console.error('Dont know how to handle message: ' + msg);
+            log.error('Dont know how to handle message: ', msg);
         }
     }.bind(this));
     this.server.bind(9000);
-    console.log('Captain server started on port 9000.');
+    log.info('Captain server started on port 9000.');
 };
 
 module.exports.Captain = Captain;

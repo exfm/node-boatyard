@@ -9,16 +9,18 @@ var suck = require('../'),
     cluster = require('cluster'),
     dgram  = require('dgram'),
     Buffer = require('buffer').Buffer,
-    util = require('util');
+    util = require('util'),
+    winston = require('winston');
 
+var log = winston.loggers.get('shipyard');
 
 var captainHost = 'localhost';
 
 function messageHandler(workerId, msg){
     var data = [];
 
-    console.log('Got message from worker', workerId, msg);
-    console.log('Worker World ID', hostname+"/worker/"+workerId);
+    log.silly('Got message from worker ' + workerId, msg);
+
     if(msg.indexOf("FEEDME") === 0){
         accquirePartition(workerId);
     }
@@ -79,12 +81,11 @@ function eat(partitionId, start, stop){
 }
 
 if (cluster.isMaster){
-    console.log('I am the master.', hostname);
-
-
     for (var i = 0; i < numCPUs; i++){
         cluster.fork();
     }
+
+    log.info('Started ' + Object.keys(cluster.workers).length + ' hands');
 
     Object.keys(cluster.workers).forEach(function(id) {
         cluster.workers[id].on('message', function(msg){
@@ -96,12 +97,12 @@ if (cluster.isMaster){
         msg = msg.toString();
         var data = [];
 
-        console.log('Got message from captain', msg.toString(), rinfo);
+        log.silly('Got message from captain ' + msg.toString(), rinfo);
         if(msg.indexOf("EMPTY") === 0){
             data = /EMPTY\|([\w\.]+)-(\d+)/.exec(msg);
             if(cluster.workers.hasOwnProperty(data[2])){
                 cluster.workers[data[2]].destroy();
-                console.log('Got EMPTY.  Killed worker ', data[2]);
+                log.info('Got EMPTY.  Killed worker ' + data[2]);
             }
             if(Object.keys(cluster.workers).length === 0){
                 server.close();
@@ -121,15 +122,13 @@ if (cluster.isMaster){
             'stop': data[5]
         });
 
-        console.log(data);
-
     });
     server.bind(9001);
 }
 else {
     process.send('FEEDME');
     process.on('message', function(msg){
-        console.log('Worker got message', msg);
+        log.info('Worker got message', msg);
         if(msg.action === 'EAT'){
             eat(msg.partitionId, msg.start, msg.stop);
         }
