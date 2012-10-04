@@ -162,6 +162,14 @@ Captain.prototype.startServer = function(){
                 client.close();
             });
         }
+        else if(msg.action === 'HEARTBEAT'){
+            var client = dgram.createSocket("udp4"),
+                message = new Buffer(JSON.stringify({'action': "HEARTBOOP"}));
+            client.send(message, 0, message.length, 9001, rinfo.address, function(err, bytes) {
+                client.close();
+            });
+
+        }
         else if(msg.action === 'PROGRESS'){
             this.partitions[msg.partitionId].progress(msg.total, msg.completed,
                 msg.errored, msg.statusMessage);
@@ -188,8 +196,22 @@ function Mate(id, captainHost, numHands){
     this.id = id;
     this.captainHost = captainHost;
     this.numHands = numHands;
+    this.captainAlive = false;
+    this.messageQueue = [];
+    this.monitorInterval = null;
 }
 util.inherits(Hand, EventEmitter);
+
+Mate.prototype.monitorCaptain = function(){
+    var client = dgram.createSocket("udp4"),
+        message = new Buffer(JSON.stringify({
+            'action': 'HEARTBEAT',
+            'mate': this.id
+        }));
+    client.send(message, 0, message.length, 9000, this.captainHost, function() {
+        client.close();
+    });
+};
 
 Mate.prototype.allHandsOnDeck = function(){
     for (var i = 0; i < this.numHands; i++){
@@ -214,24 +236,42 @@ Mate.prototype.allHandsOnDeck = function(){
             }
             if(Object.keys(cluster.workers).length === 0){
                 log.info('All hands relieved.  Jumping ship.');
+                clearInterval(this.monitorInterval);
                 this.server.close();
             }
             return;
         }
-        this.tellHand(msg.hand, msg);
+        if(msg.action === "HEARTBOOP"){
+            this.captainAlive = true;
+            this.messageQueue.forEach(function(m){
+                this.tellCaptain(m[0], m[1]);
+            }.bind(this));
 
+            this.messageQueue = [];
+
+            return;
+        }
+        this.tellHand(msg.hand, msg);
     }.bind(this));
+
+    this.monitorInterval = setInterval(this.monitorCaptain.bind(this), 100);
+
     this.server.bind(9001);
     return this;
 };
 
 Mate.prototype.tellCaptain = function(handId, msg){
-    var client = dgram.createSocket("udp4"),
-        message = new Buffer(JSON.stringify(msg));
-    log.silly("Telling captain for hand " + handId + ": " + message.toString());
-    client.send(message, 0, message.length, 9000, this.captainHost, function() {
-        client.close();
-    });
+    if(this.captainAlive === false){
+        this.messageQueue[this.messageQueue.length] = [handId, msg];
+    }
+    else{
+        var client = dgram.createSocket("udp4"),
+            message = new Buffer(JSON.stringify(msg));
+        log.silly("Telling captain for hand " + handId + ": " + message.toString());
+        client.send(message, 0, message.length, 9000, this.captainHost, function() {
+            client.close();
+        });
+    }
 };
 
 Mate.prototype.tellHand = function(handId, msg){
