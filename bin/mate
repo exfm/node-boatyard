@@ -5,7 +5,6 @@
 var suck = require('../'),
     os = require('os'),
     hostname = os.hostname(),
-    numCPUs = os.cpus().length,
     cluster = require('cluster'),
     dgram  = require('dgram'),
     Buffer = require('buffer').Buffer,
@@ -14,7 +13,8 @@ var suck = require('../'),
 
 var log = winston.loggers.get('shipyard');
 
-var captainHost = 'localhost';
+var captainHost = 'localhost',
+    numHands = os.cpus().length;
 
 function messageHandler(workerId, msg){
     log.silly('Got message from worker ' + workerId, msg);
@@ -31,30 +31,47 @@ function messageHandler(workerId, msg){
     }
 }
 
-function sendMessage(workerId, msg){
+function tellCaptain(workerId, msg){
     var client = dgram.createSocket("udp4"),
-        message = new Buffer(msg);
+        message = new Buffer(JSON.stringify(msg));
 
     client.send(message, 0, message.length, 9000, captainHost, function(err, bytes) {
         client.close();
     });
 }
 
-function accquirePartition(workerId){
-    sendMessage(workerId, util.format("FEEDME|%s|%s", hostname, workerId));
+function accquirePartition(handId){
+    tellCaptain(handId, {
+        'action': "FEEDME",
+        'mate': hostname,
+        'hand': handId
+    });
 }
 
-function sendPartitionProgress(workerId, partitionId, total, completed, errored, msg){
-    sendMessage(workerId, util.format("PROGRESS|%s|%s-%s-%s-%s",
-        partitionId, total, completed, errored, msg));
+function sendPartitionProgress(handId, partitionId, total, completed, errored, msg){
+    tellCaptain(handId, {
+        'action': "PROGRESS",
+        'partitionId': partitionId,
+        'total': total,
+        'completed': completed,
+        'errored': errored,
+        'message': msg
+    });
 }
 
-function partitionError(workerId, partitionId, msg){
-    sendMessage(workerId, util.format("ERROR|%s|%s", partitionId, msg));
+function partitionError(handId, partitionId, msg){
+    tellCaptain(handId, {
+        'action': "ERROR",
+        'partitionId': partitionId,
+        'message': msg
+    });
 }
 
-function releasePartition(workerId, partitionId){
-    sendMessage(workerId, util.format("RELEASE|%s", partitionId));
+function releasePartition(handId, partitionId){
+    tellCaptain(handId, {
+        'action': "RELEASE",
+        'partitionId': partitionId
+    });
 }
 
 var eatInterval = null;
@@ -89,7 +106,7 @@ function eat(partitionId, start, stop){
 }
 
 if (cluster.isMaster){
-    for (var i = 0; i < numCPUs; i++){
+    for (var i = 0; i < numHands; i++){
         cluster.fork();
     }
 
@@ -102,32 +119,21 @@ if (cluster.isMaster){
     });
 
     var server = dgram.createSocket('udp4', function (msg, rinfo) {
-        msg = msg.toString();
-        var data = [];
-
         log.silly('Got message from captain ' + msg.toString(), rinfo);
-        if(msg.indexOf("EMPTY") === 0){
-            data = /EMPTY\|([\w\.]+)-(\d+)/.exec(msg);
-            if(cluster.workers.hasOwnProperty(data[2])){
-                cluster.workers[data[2]].destroy();
-                log.info('Got EMPTY.  Killed worker ' + data[2]);
+
+        msg = JSON.parse(msg.toString());
+        if(msg.action === "EMPTY"){
+            if(cluster.workers.hasOwnProperty(msg.hand)){
+                cluster.workers[msg.hand].destroy();
+                log.info('Got EMPTY.  Killed worker ' + msg.hand);
             }
             if(Object.keys(cluster.workers).length === 0){
                 server.close();
             }
             return;
         }
-        data = /EAT\|([\w\.]+)-(\d+)\|(\d+)\|(\d+)-(\d+)/.exec(msg);
 
-        var workerId = data[2],
-            partitionId = data[3];
-
-        cluster.workers[workerId].send({
-            'action': 'EAT',
-            'partitionId': data[3],
-            'start': data[4],
-            'stop': data[5]
-        });
+        cluster.workers[msg.hand].send(msg);
 
     });
     server.bind(9001);

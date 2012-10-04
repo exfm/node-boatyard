@@ -105,27 +105,26 @@ Captain.prototype.startShip = function(){
 
 Captain.prototype.startServer = function(){
     this.server = dgram.createSocket('udp4', function (msg, rinfo) {
-        msg = msg.toString();
 
-        log.info('Got message: ' + msg, rinfo);
+
+        log.info('Got message: ' + msg.toString(), rinfo);
+        msg = JSON.parse(msg.toString());
         var workerAddress = rinfo.address,
             data = [],
             partitionId = -1,
             statusMessage = "",
             completed = -1,
             total = -1,
-            errored = -1;
+            errored = -1,
+            mateId = msg.mate,
+            handId = msg.hand;
 
 
-        if(msg.indexOf("FEEDME") === 0){
+        if(msg.action === "FEEDME"){
             // Pick a partition and pass it back to the worker
             var client = dgram.createSocket("udp4"),
                 partition,
                 message;
-
-            data = /FEEDME\|([\w\.]+)\|(\d+)/.exec(msg);
-            var mateId = data[1],
-                handId = data[2];
 
             if(this.availablePartitions.length){
                 partitionId = this.availablePartitions.shift();
@@ -134,38 +133,44 @@ Captain.prototype.startServer = function(){
                 log.info(util.format('Giving partition %s to hand %s on mate %s',
                     partition, handId, mateId));
 
-                message = new Buffer("EAT|"+mateId+"-"+handId+"|" + partitionId+"|" + partition.start + "-" + partition.stop);
+                message = new Buffer(JSON.stringify({
+                    'action': "EAT",
+                    'mate': mateId,
+                    'hand': handId,
+                    'partitionId': partitionId,
+                    'start': partition.start,
+                    'stop': partition.stop,
+                    'mongoHost': this.getRandomMongoHost(),
+                    'dbName': this.dbName,
+                    'collectionName': this.collectionName
+                }));
             }
             else{
-                message = new Buffer("EMPTY|"+mateId + "-" + handId);
-                log.info('Available partitions empty.  Sending empty to kill hand ' + handId + ' on mate ' + mateId);
+                message = new Buffer(JSON.stringify({
+                    'action': "EMPTY",
+                    'mate': mateId,
+                    'hand': handId
+                }));
+
+                log.info('Available partitions empty.');
+                log.info(util.format('Sending empty to kill hand %s on mate %s',
+                    handId, mateId));
             }
             client.send(message, 0, message.length, 9001, rinfo.address, function(err, bytes) {
                 client.close();
             });
         }
-        else if(msg.indexOf('PROGRESS|') === 0){
-            data = /PROGRESS\|(\d+)\|(\d+)-(\d+)-(\d+)-(.*)/.exec(msg);
-            partitionId = Number(data[1]);
-            total = Number(data[2]);
-            completed = Number(data[3]);
-            errored = Number(data[4]);
-            statusMessage = data[5];
-            this.partitions[partitionId].progress(total, completed,
-                errored, statusMessage);
+        else if(msg.action === 'PROGRESS'){
+            this.partitions[msg.partitionId].progress(msg.total, msg.completed,
+                msg.errored, msg.statusMessage);
             // Calculate total job progress
 
         }
-        else if(msg.indexOf('RELEASE|') === 0){
-            data = /RELEASE\|(\d+)/.exec(msg);
-            partitionId = Number(data[1]);
-            this.partitions[partitionId].release();
+        else if(msg.action === 'RELEASE'){
+            this.partitions[msg.partitionId].release();
         }
-        else if(msg.indexOf('ERROR|') === 0){
-            data = /ERROR\|(\d+)\|(.*)/.exec(msg);
-            partitionId = Number(data[1]);
-            statusMessage = data[2];
-            this.partitions[partitionId].error(statusMessage);
+        else if(msg.action === 'ERROR'){
+            this.partitions[msg.partitionId].error(msg.message);
         }
         else{
             log.error('Dont know how to handle message: ', msg);
