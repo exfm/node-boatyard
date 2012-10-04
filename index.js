@@ -1,7 +1,6 @@
 "use strict";
 var util = require('util'),
     EventEmitter = require('events').EventEmitter,
-    mongo = require('mongodb'),
     sequence = require('sequence'),
     when = require('when'),
     dgram  = require('dgram'),
@@ -23,17 +22,22 @@ var PARTITION_STATE = {
     'ERROR': -1
 };
 
-function Partition(id, start, stop){
-    this.id = id;
-    this.start = start;
-    this.stop = stop;
+function Partition(captain, data){
+    Object.keys(data).forEach(function(k){
+        this[k] = data[k];
+    }.bind(this));
+
+    Object.keys(captain.extras).forEach(function(k){
+        this[k] = captain.get(k);
+    }.bind(this));
+
     this.state = PARTITION_STATE.AVAILABLE;
 }
 util.inherits(Partition, EventEmitter);
 
-Partition.prototype.accquire = function(workerId, mateId){
+Partition.prototype.accquire = function(handId, mateId){
     this.mateId = mateId;
-    this.workerId = workerId;
+    this.handId = handId;
     this.state = PARTITION_STATE.PROCESSING;
     this.emit('accquired');
 };
@@ -53,62 +57,47 @@ Partition.prototype.progress = function(total, complete, error, msg){
 };
 
 Partition.prototype.toString = function(){
-    return util.format("Partition(id=%d, start=%d, stop=%d)",
-        this.id, this.start, this.stop);
+    return util.format("Partition(id=%d)", this.id);
 };
 
 // Captain dishes out partitions to mates
-function Captain(mongoHosts, dbName, collectionName, partitionSize){
-    this.mongoHosts = mongoHosts;
-    this.dbName = dbName;
-    this.collectionName = collectionName;
+function Captain(partitionSize){
     this.partitionSize = partitionSize;
     this.partitionCount = 0;
     this.partitions = {};
-
-    this.db = {};
-    this.collection = {};
     this.total = 0;
 
     this.availablePartitions = [];
     this.completedPartitions = [];
+    this.extras = {};
 }
 
-Captain.prototype.getRandomMongoHost = function(){
-    return this.mongoHosts[Math.floor(Math.random()*this.mongoHosts.length)];
+Captain.prototype.set = function(k, v){
+    this.extras[k] = v;
 };
 
-Captain.prototype.startShip = function(){
-    // How many things do we need to chew through?
-    log.silly('Starting ship....');
-    this.db = new mongo.Db(this.dbName,
-        new mongo.Server(this.mongoHosts[0], 27017, {}),
-        {'native_parser':true, 'slave_ok': true});
+Captain.prototype.get = function(k){
+    if(this.hasOwnProperty(k)){
+        return this[k];
+    }
+    // @todo (lucas) Allow callable extras, ie random mongo host.
+    return this.extras[k];
+};
 
-    sequence(this).then(function(next){
-        this.db.open(next);
-    }).then(function(next, err, db){
-        db.collection(this.collectionName, next);
-    }).then(function(next, err, collection){
-        this.collection = collection;
-        this.collection.count(next);
-    }).then(function(next, err, count){
-        this.total = count;
-        this.partitionCount = Math.ceil(this.total/this.partitionSize);
-        for(var i = 0; i< this.partitionCount; i++){
-            this.partitions[i] = new Partition(i,
-                i*this.partitionSize, (i*this.partitionSize) + this.partitionSize);
-            this.availablePartitions.push(i);
+Captain.prototype.startShip = function(partitioner){
+    partitioner.apply(this, [function(total, data){
+        this.total = total;
+        this.partitionCount = Math.ceil(this.total/ this.partitionSize);
+        for(var i = 0; i < data.length; i++){
+            this.partitions[data[i].id] = new Partition(this, data[i]);
         }
         log.silly('Determined Partitions: ', this.partitions);
         this.startServer();
-    });
+    }.bind(this)]);
 };
 
 Captain.prototype.startServer = function(){
     this.server = dgram.createSocket('udp4', function (msg, rinfo) {
-
-
         log.info('Got message: ' + msg.toString(), rinfo);
         msg = JSON.parse(msg.toString());
         var workerAddress = rinfo.address,
@@ -140,11 +129,7 @@ Captain.prototype.startServer = function(){
                     'mate': mateId,
                     'hand': handId,
                     'partitionId': partitionId,
-                    'start': partition.start,
-                    'stop': partition.stop,
-                    'mongoHost': this.getRandomMongoHost(),
-                    'dbName': this.dbName,
-                    'collectionName': this.collectionName
+                    'partition': partition.getData()
                 }));
             }
             else{

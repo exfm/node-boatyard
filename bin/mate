@@ -17,7 +17,9 @@ var captainHost = 'localhost',
     numHands = os.cpus().length;
 
 var eatInterval = null;
-function eat(partitionId, start, stop){
+function eat(partitionId, start, stop, mongoHost){
+    log.info('EAT', arguments);
+
     var completed = 0,
         total = stop - start;
 
@@ -41,6 +43,7 @@ else {
     new Hand(hostname).getToWork(function(msg){
         log.silly('Working on partition ', msg);
         console.log('ctx', this);
-        eat.apply(this, [msg.partitionId, msg.start, msg.stop]);
+        eat.apply(this, [msg.partitionId, msg.partition.start,
+            msg.partition.stop, msg.partition.mongoHost]);
     });
 }

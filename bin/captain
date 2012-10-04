@@ -14,5 +14,5 @@ var suck = require('../'),
 var hosts = ['localhost'];
 
 
-var captain = new Captain(hosts, 'exfm', 'song.meta', 100000);
-captain.startShip();
+var captain = new Captain(100000);
+captain.startShip(require('../examples/partitioner.js'));
