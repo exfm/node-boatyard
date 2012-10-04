@@ -17,20 +17,17 @@ var log = winston.loggers.get('shipyard');
 var captainHost = 'localhost';
 
 function messageHandler(workerId, msg){
-    var data = [];
-
     log.silly('Got message from worker ' + workerId, msg);
 
-    if(msg.indexOf("FEEDME") === 0){
+    if(msg.action === "FEEDME"){
         accquirePartition(workerId);
     }
-    else if(msg.indexOf("PROGRESS") === 0){
-        data = /PROGRESS\|(\d+)\|(\d+)-(\d+)-(\d+)-(.*)/.exec(msg);
-        sendPartitionProgress(workerId, data[1], data[2], data[3], data[4], data[5]);
+    else if(msg.action === "PROGRESS"){
+        sendPartitionProgress(workerId, msg.partitionId, msg.total,
+            msg.completed, msg.errored, msg.message);
     }
-    else if(msg.indexOf("RELEASE") === 0){
-        data = /RELEASE\|(\d+)/.exec(msg);
-        releasePartition(workerId, data[1]);
+    else if(msg.action === "RELEASE"){
+        releasePartition(workerId, msg.partitionId);
     }
 }
 
@@ -69,13 +66,24 @@ function eat(partitionId, start, stop){
     eatInterval = setInterval(function(){
         completed += 10000;
         if(completed === total){
-            process.send(util.format("RELEASE|%s", partitionId));
+            process.send({
+                'action': "RELEASE",
+                'partitionId': partitionId
+            });
+            process.send({
+                'action': "FEEDME"
+            });
             clearInterval(eatInterval);
         }
         else{
-            process.send(util.format("PROGRESS|%s|%s-%s-%s-%s", partitionId,
-                total, completed, 0, "Making sausages"));
-            process.send('FEEDME');
+            process.send({
+                'action': "PROGRESS",
+                'partitionId': partitionId,
+                'total': total,
+                'completed': completed,
+                'errored': 0,
+                'message': "Making sausages...."
+            });
         }
     }, 100);
 }
@@ -114,7 +122,6 @@ if (cluster.isMaster){
         var workerId = data[2],
             partitionId = data[3];
 
-
         cluster.workers[workerId].send({
             'action': 'EAT',
             'partitionId': data[3],
@@ -126,7 +133,8 @@ if (cluster.isMaster){
     server.bind(9001);
 }
 else {
-    process.send('FEEDME');
+    process.send({'action': 'FEEDME'});
+
     process.on('message', function(msg){
         log.info('Worker got message', msg);
         if(msg.action === 'EAT'){
