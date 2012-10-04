@@ -2,12 +2,12 @@
 
 "use strict";
 
-var suck = require('../'),
+var yard = require('../'),
+    Mate = yard.Mate,
+    Hand = yard.Hand,
     os = require('os'),
     hostname = os.hostname(),
     cluster = require('cluster'),
-    dgram  = require('dgram'),
-    Buffer = require('buffer').Buffer,
     util = require('util'),
     winston = require('winston');
 
@@ -16,66 +16,7 @@ var log = winston.loggers.get('shipyard');
 var captainHost = 'localhost',
     numHands = os.cpus().length;
 
-function messageHandler(workerId, msg){
-    log.silly('Got message from worker ' + workerId, msg);
-
-    if(msg.action === "FEEDME"){
-        accquirePartition(workerId);
-    }
-    else if(msg.action === "PROGRESS"){
-        sendPartitionProgress(workerId, msg.partitionId, msg.total,
-            msg.completed, msg.errored, msg.message);
-    }
-    else if(msg.action === "RELEASE"){
-        releasePartition(workerId, msg.partitionId);
-    }
-}
-
-function tellCaptain(workerId, msg){
-    var client = dgram.createSocket("udp4"),
-        message = new Buffer(JSON.stringify(msg));
-
-    client.send(message, 0, message.length, 9000, captainHost, function(err, bytes) {
-        client.close();
-    });
-}
-
-function accquirePartition(handId){
-    tellCaptain(handId, {
-        'action': "FEEDME",
-        'mate': hostname,
-        'hand': handId
-    });
-}
-
-function sendPartitionProgress(handId, partitionId, total, completed, errored, msg){
-    tellCaptain(handId, {
-        'action': "PROGRESS",
-        'partitionId': partitionId,
-        'total': total,
-        'completed': completed,
-        'errored': errored,
-        'message': msg
-    });
-}
-
-function partitionError(handId, partitionId, msg){
-    tellCaptain(handId, {
-        'action': "ERROR",
-        'partitionId': partitionId,
-        'message': msg
-    });
-}
-
-function releasePartition(handId, partitionId){
-    tellCaptain(handId, {
-        'action': "RELEASE",
-        'partitionId': partitionId
-    });
-}
-
 var eatInterval = null;
-
 function eat(partitionId, start, stop){
     var completed = 0,
         total = stop - start;
@@ -83,68 +24,23 @@ function eat(partitionId, start, stop){
     eatInterval = setInterval(function(){
         completed += 10000;
         if(completed === total){
-            process.send({
-                'action': "RELEASE",
-                'partitionId': partitionId
-            });
-            process.send({
-                'action': "FEEDME"
-            });
+            this.release();
+            this.getWorkToDo();
             clearInterval(eatInterval);
         }
         else{
-            process.send({
-                'action': "PROGRESS",
-                'partitionId': partitionId,
-                'total': total,
-                'completed': completed,
-                'errored': 0,
-                'message': "Making sausages...."
-            });
+            this.progress(total, completed, 0, "Making sausages....");
         }
-    }, 100);
+    }.bind(this), 100);
 }
 
 if (cluster.isMaster){
-    for (var i = 0; i < numHands; i++){
-        cluster.fork();
-    }
-
-    log.info('Started ' + Object.keys(cluster.workers).length + ' hands');
-
-    Object.keys(cluster.workers).forEach(function(id) {
-        cluster.workers[id].on('message', function(msg){
-            messageHandler.apply(this, [id, msg]);
-        });
-    });
-
-    var server = dgram.createSocket('udp4', function (msg, rinfo) {
-        log.silly('Got message from captain ' + msg.toString(), rinfo);
-
-        msg = JSON.parse(msg.toString());
-        if(msg.action === "EMPTY"){
-            if(cluster.workers.hasOwnProperty(msg.hand)){
-                cluster.workers[msg.hand].destroy();
-                log.info('Got EMPTY.  Killed worker ' + msg.hand);
-            }
-            if(Object.keys(cluster.workers).length === 0){
-                server.close();
-            }
-            return;
-        }
-
-        cluster.workers[msg.hand].send(msg);
-
-    });
-    server.bind(9001);
+    new Mate(hostname, captainHost, numHands).allHandsOnDeck();
 }
 else {
-    process.send({'action': 'FEEDME'});
-
-    process.on('message', function(msg){
-        log.info('Worker got message', msg);
-        if(msg.action === 'EAT'){
-            eat(msg.partitionId, msg.start, msg.stop);
-        }
+    new Hand(hostname).getToWork(function(msg){
+        log.silly('Working on partition ', msg);
+        console.log('ctx', this);
+        eat.apply(this, [msg.partitionId, msg.start, msg.stop]);
     });
 }

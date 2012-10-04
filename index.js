@@ -5,7 +5,8 @@ var util = require('util'),
     sequence = require('sequence'),
     when = require('when'),
     dgram  = require('dgram'),
-    winston = require('winston');
+    winston = require('winston'),
+    cluster = require('cluster');
 
 winston.loggers.add('shipyard', {
     console: {
@@ -70,6 +71,7 @@ function Captain(mongoHosts, dbName, collectionName, partitionSize){
     this.total = 0;
 
     this.availablePartitions = [];
+    this.completedPartitions = [];
 }
 
 Captain.prototype.getRandomMongoHost = function(){
@@ -182,11 +184,159 @@ Captain.prototype.startServer = function(){
 
 module.exports.Captain = Captain;
 
+function Mate(id, captainHost, numHands){
+    this.id = id;
+    this.captainHost = captainHost;
+    this.numHands = numHands;
+}
+util.inherits(Hand, EventEmitter);
+
+Mate.prototype.allHandsOnDeck = function(){
+    for (var i = 0; i < this.numHands; i++){
+        cluster.fork();
+    }
+
+    Object.keys(cluster.workers).forEach(function(id) {
+        cluster.workers[id].on('message', function(msg){
+            this.handleMessageFromHand(id, msg);
+        }.bind(this));
+    }.bind(this));
+
+    log.info('Started ' + Object.keys(cluster.workers).length + ' hands');
+
+    this.server = dgram.createSocket('udp4', function (msg, rinfo) {
+        log.silly('Got message from captain ' + msg.toString(), rinfo);
+
+        msg = JSON.parse(msg.toString());
+        if(msg.action === "EMPTY"){
+            if(cluster.workers.hasOwnProperty(msg.hand)){
+                this.killHand(msg.hand);
+            }
+            if(Object.keys(cluster.workers).length === 0){
+                log.info('All hands relieved.  Jumping ship.');
+                this.server.close();
+            }
+            return;
+        }
+        this.tellHand(msg.hand, msg);
+
+    }.bind(this));
+    this.server.bind(9001);
+    return this;
+};
+
+Mate.prototype.tellCaptain = function(handId, msg){
+    var client = dgram.createSocket("udp4"),
+        message = new Buffer(JSON.stringify(msg));
+    log.silly("Telling captain for hand " + handId + ": " + message.toString());
+    client.send(message, 0, message.length, 9000, this.captainHost, function() {
+        client.close();
+    });
+};
+
+Mate.prototype.tellHand = function(handId, msg){
+    cluster.workers[handId].send(msg);
+};
+
+Mate.prototype.handleMessageFromHand = function(handId, msg){
+    if(msg.action === "FEEDME"){
+        this.accquire(handId);
+    }
+    else if(msg.action === "PROGRESS"){
+        this.progress(handId, msg.partitionId, msg.total,
+            msg.completed, msg.errored, msg.message);
+    }
+    else if(msg.action === "RELEASE"){
+        this.release(handId, msg.partitionId);
+    }
+    else if(msg.action === "ERROR"){
+        this.error(handId, msg.partitionId, msg.message);
+    }
+};
+
+Mate.prototype.accquire = function(handId){
+    this.tellCaptain(handId, {
+        'action': "FEEDME",
+        'mate': this.id,
+        'hand': handId
+    });
+};
+
+Mate.prototype.progress = function(handId, partitionId, total, completed, errored, message){
+    this.tellCaptain(handId, {
+        'action': "PROGRESS",
+        'partitionId': partitionId,
+        'total': total,
+        'completed': completed,
+        'errored': errored,
+        'message': message
+    });
+};
+
+Mate.prototype.release = function(handId, partitionId){
+    this.tellCaptain(handId, {
+        'action': "RELEASE",
+        'partitionId': partitionId
+    });
+};
+
+Mate.prototype.killHand = function(handId){
+    cluster.workers[handId].destroy();
+    log.info('Killed hand ' + handId);
+};
+
+module.exports.Mate = Mate;
 
 
 function Hand(mateId){
     this.mateId = mateId;
+    this.partitionId = -1;
+    this.id = cluster.worker.id;
 }
 util.inherits(Hand, EventEmitter);
 
+Hand.prototype.tellMate = function(message){
+    message.hand = this.id;
+    process.send(message);
+};
 
+Hand.prototype.getToWork = function(task){
+    process.on('message', function(msg){
+        log.info('Worker got message', msg);
+        this.partitionId = msg.partitionId;
+        task.apply(this, [msg]);
+    }.bind(this));
+    this.getWorkToDo();
+};
+
+Hand.prototype.getWorkToDo = function(){
+    process.send({'action': 'FEEDME'});
+};
+
+Hand.prototype.progress = function(total, completed, errored, message){
+    this.tellMate({
+        'action': "PROGRESS",
+        'total': total,
+        'completed': completed,
+        'errored': errored,
+        'message': message,
+        'partitionId': this.partitionId
+    });
+};
+
+Hand.prototype.error = function(message){
+    this.tellMate({
+        'action': "ERROR",
+        'message': message
+    });
+};
+
+Hand.prototype.release = function(){
+    this.tellMate({
+        'action': "RELEASE",
+        'partitionId': this.partitionId
+    });
+};
+
+
+module.exports.Hand = Hand;
