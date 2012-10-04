@@ -1,0 +1,17 @@
+{
+  "name": "mongosuck",
+  "version": "0.0.0",
+  "description": "Suck things out of mongo, put them in dynamo/S3",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": "",
+  "author": "Lucas Hrabovsky",
+  "license": "BSD",
+  "dependencies": {
+    "mongodb": "1.1.8",
+    "when": "git://github.com/exfm/when.git",
+    "sequence": "2.2.1"
+  }
+}

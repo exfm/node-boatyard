@@ -1,0 +1,137 @@
+#!/usr/bin/env node
+
+"use strict";
+
+var suck = require('../'),
+    os = require('os'),
+    hostname = os.hostname(),
+    numCPUs = os.cpus().length,
+    cluster = require('cluster'),
+    dgram  = require('dgram'),
+    Buffer = require('buffer').Buffer,
+    util = require('util');
+
+
+var captainHost = 'localhost';
+
+function messageHandler(workerId, msg){
+    var data = [];
+
+    console.log('Got message from worker', workerId, msg);
+    console.log('Worker World ID', hostname+"/worker/"+workerId);
+    if(msg.indexOf("FEEDME") === 0){
+        accquirePartition(workerId);
+    }
+    else if(msg.indexOf("PROGRESS") === 0){
+        data = /PROGRESS\|(\d+)\|(\d+)-(\d+)-(\d+)-(.*)/.exec(msg);
+        sendPartitionProgress(workerId, data[1], data[2], data[3], data[4], data[5]);
+    }
+    else if(msg.indexOf("RELEASE") === 0){
+        data = /RELEASE\|(\d+)/.exec(msg);
+        releasePartition(workerId, data[1]);
+    }
+}
+
+function sendMessage(workerId, msg){
+    var client = dgram.createSocket("udp4"),
+        message = new Buffer(msg);
+
+    client.send(message, 0, message.length, 9000, captainHost, function(err, bytes) {
+        client.close();
+    });
+}
+
+function accquirePartition(workerId){
+    sendMessage(workerId, util.format("FEEDME|%s|%s", hostname, workerId));
+}
+
+function sendPartitionProgress(workerId, partitionId, total, completed, errored, msg){
+    sendMessage(workerId, util.format("PROGRESS|%s|%s-%s-%s-%s",
+        partitionId, total, completed, errored, msg));
+}
+
+function partitionError(workerId, partitionId, msg){
+    sendMessage(workerId, util.format("ERROR|%s|%s", partitionId, msg));
+}
+
+function releasePartition(workerId, partitionId){
+    sendMessage(workerId, util.format("RELEASE|%s", partitionId));
+}
+
+var eatInterval = null;
+
+function eat(partitionId, start, stop){
+    var completed = 0,
+        total = stop - start;
+
+    eatInterval = setInterval(function(){
+        completed += 10000;
+        if(completed === total){
+            process.send(util.format("RELEASE|%s", partitionId));
+            clearInterval(eatInterval);
+        }
+        else{
+            process.send(util.format("PROGRESS|%s|%s-%s-%s-%s", partitionId,
+                total, completed, 0, "Making sausages"));
+            process.send('FEEDME');
+        }
+    }, 100);
+}
+
+if (cluster.isMaster){
+    console.log('I am the master.', hostname);
+
+
+    for (var i = 0; i < numCPUs; i++){
+        cluster.fork();
+    }
+
+    Object.keys(cluster.workers).forEach(function(id) {
+        cluster.workers[id].on('message', function(msg){
+            messageHandler.apply(this, [id, msg]);
+        });
+    });
+
+    var server = dgram.createSocket('udp4', function (msg, rinfo) {
+        msg = msg.toString();
+        var data = [];
+
+        console.log('Got message from captain', msg.toString(), rinfo);
+        if(msg.indexOf("EMPTY") === 0){
+            data = /EMPTY\|([\w\.]+)-(\d+)/.exec(msg);
+            if(cluster.workers.hasOwnProperty(data[2])){
+                cluster.workers[data[2]].destroy();
+                console.log('Got EMPTY.  Killed worker ', data[2]);
+            }
+            if(Object.keys(cluster.workers).length === 0){
+                server.close();
+            }
+            return;
+        }
+        data = /EAT\|([\w\.]+)-(\d+)\|(\d+)\|(\d+)-(\d+)/.exec(msg);
+
+        var workerId = data[2],
+            partitionId = data[3];
+
+
+        cluster.workers[workerId].send({
+            'action': 'EAT',
+            'partitionId': data[3],
+            'start': data[4],
+            'stop': data[5]
+        });
+
+        console.log(data);
+
+    });
+    server.bind(9001);
+}
+else {
+    process.send('FEEDME');
+    process.on('message', function(msg){
+        console.log('Worker got message', msg);
+        if(msg.action === 'EAT'){
+            eat(msg.partitionId, msg.start, msg.stop);
+        }
+    });
+}

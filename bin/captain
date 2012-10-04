@@ -1,0 +1,18 @@
+#!/usr/bin/env node
+
+"use strict";
+
+var suck = require('../'),
+    Captain = suck.Captain;
+
+// var hosts = [
+//     'mongo1.internal-exfm.com',
+//     'mongo2.internal-exfm.com',
+//     'mongo3.internal-exfm.com'
+// ];
+
+var hosts = ['localhost'];
+
+
+var captain = new Captain(hosts, 'exfm', 'song.meta', 100000);
+captain.startShip();
