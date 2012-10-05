@@ -92,6 +92,7 @@ Captain.prototype.startShip = function(partitioner){
         this.partitionCount = Math.ceil(this.total/ this.partitionSize);
         for(var i = 0; i < data.length; i++){
             this.partitions[data[i].id] = new Partition(this, data[i]);
+            this.availablePartitions.push(data[i].id);
         }
         log.silly('Determined Partitions: ', this.partitions);
         this.startServer();
@@ -130,9 +131,9 @@ Captain.prototype.startServer = function(){
                     'action': "EAT",
                     'mate': mateId,
                     'hand': handId,
-                    'partitionId': partitionId,
-                    'partition': partition.getData()
+                    'partition': partition
                 }));
+                console.log(message.toString());
             }
             else{
                 message = new Buffer(JSON.stringify({
@@ -330,7 +331,7 @@ Hand.prototype.tellMate = function(message){
 Hand.prototype.getToWork = function(task){
     process.on('message', function(msg){
         log.info('Worker got message', msg);
-        this.partitionId = msg.partitionId;
+        this.partitionId = msg.partition.id;
         task.apply(this, [msg]);
     }.bind(this));
     this.getWorkToDo();

@@ -14,27 +14,9 @@ var yard = require('../'),
 var log = winston.loggers.get('shipyard');
 
 var captainHost = 'localhost',
-    numHands = os.cpus().length;
+    numHands = os.cpus().length,
+    task = require('../examples/task.js');
 
-var eatInterval = null;
-function eat(partitionId, start, stop, mongoHost){
-    log.info('EAT', arguments);
-
-    var completed = 0,
-        total = stop - start;
-
-    eatInterval = setInterval(function(){
-        completed += 10000;
-        if(completed === total){
-            this.release();
-            this.getWorkToDo();
-            clearInterval(eatInterval);
-        }
-        else{
-            this.progress(total, completed, 0, "Making sausages....");
-        }
-    }.bind(this), 100);
-}
 
 if (cluster.isMaster){
     new Mate(hostname, captainHost, numHands).allHandsOnDeck();
@@ -42,8 +24,6 @@ if (cluster.isMaster){
 else {
     new Hand(hostname).getToWork(function(msg){
         log.silly('Working on partition ', msg);
-        console.log('ctx', this);
-        eat.apply(this, [msg.partitionId, msg.partition.start,
-            msg.partition.stop, msg.partition.mongoHost]);
+        task.apply(this, [msg.partition]);
     });
 }

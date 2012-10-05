@@ -1,21 +1,23 @@
 "use strict";
 
-var eatInterval = null;
-function eat(partitionId, start, stop){
-    var completed = 0,
-        total = stop - start;
+var interval = null;
+module.exports = function(partition){
+    var self = this,
+        completed = 0,
+        total = partition.stop - partition.start;
 
-    eatInterval = setInterval(function(){
+    function work(){
         completed += 10000;
         if(completed === total){
-            this.release();
-            this.getWorkToDo();
-            clearInterval(eatInterval);
+            self.release();
+            self.getWorkToDo();
+            clearInterval(interval);
         }
         else{
-            this.progress(total, completed, 0, "Making sausages....");
+            self.progress(total, completed, 0, "Making sausages....");
         }
-    }.bind(this), 100);
-}
+    }
+    interval = setInterval(work, 100);
 
-module.exports = eat;
+    work();
+};
