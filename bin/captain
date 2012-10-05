@@ -4,7 +4,8 @@
 
 var nconf = require('nconf'),
     suck = require('../'),
-    Captain = suck.Captain;
+    Captain = suck.Captain,
+    Ship = suck.Ship;
 
 nconf.argv()
     .env()
@@ -12,8 +13,12 @@ nconf.argv()
 
 nconf.defaults({
     'size': 100000,
-    'partitioner': '../examples/partitioner.js'
+    'partitioner': '../examples/partitioner.js',
+    'ship': 'example-partitioner',
+    'mongoHosts': ['localhost']
 });
 
-var captain = new Captain(Number(nconf.get('size')));
+var captain = new Captain(Number(nconf.get('size')),
+    new Ship(nconf.get('ship')));
+
 captain.startShip(require(nconf.get('partitioner')));

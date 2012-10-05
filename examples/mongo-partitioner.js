@@ -2,7 +2,7 @@
 
 var nconf = require('nconf'),
     mongo = require('mongodb'),
-    DB = mongo.db,
+    DB = mongo.Db,
     Server = mongo.Server;
 
 module.exports = function(cb){
@@ -24,11 +24,12 @@ module.exports = function(cb){
     db.open(function(err, db){
         db.collection(nconf.get('collectionName'), function(err, collection){
             collection.count(function(err, count){
-                for(var i = 0; i< self.partitionCount; i++){
+                var partitionCount = Math.ceil(count / self.partitionSize);
+                for(var i = 0; i< partitionCount; i++){
                     partitions.push({
                         'id': i,
                         'start': i*self.partitionSize,
-                        'stop': (i*self.partitionSize) + i.partitionSize,
+                        'stop': (i*self.partitionSize) + self.partitionSize,
                         'mongoHost': self.get('mongoHost'),
                         'dbName': self.get('dbName'),
                         'collectionName': self.get('collectionName')
