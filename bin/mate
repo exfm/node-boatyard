@@ -2,24 +2,33 @@
 
 "use strict";
 
+var os = require('os'),
+    nconf = require('nconf'),
+    cluster = require('cluster'),
+    winston = require('winston'),
+    log = winston.loggers.get('shipyard'),
+    hostname = os.hostname(),
+    task = {};
+
+nconf.argv()
+    .env()
+    .use('memory');
+
+nconf.defaults({
+    'captain': 'localhost',
+    'hands': os.cpus().length,
+    'task': '../examples/task.js'
+});
+
 var yard = require('../'),
     Mate = yard.Mate,
-    Hand = yard.Hand,
-    os = require('os'),
-    hostname = os.hostname(),
-    cluster = require('cluster'),
-    util = require('util'),
-    winston = require('winston');
+    Hand = yard.Hand;
 
-var log = winston.loggers.get('shipyard');
-
-var captainHost = 'localhost',
-    numHands = os.cpus().length,
-    task = require('../examples/task.js');
-
+task = require(nconf.get('task'));
 
 if (cluster.isMaster){
-    new Mate(hostname, captainHost, numHands).allHandsOnDeck();
+    new Mate(hostname, nconf.get('captain'), Number(nconf.get('hands')))
+        .allHandsOnDeck();
 }
 else {
     new Hand(hostname).getToWork(function(msg){

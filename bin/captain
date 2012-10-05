@@ -2,17 +2,18 @@
 
 "use strict";
 
-var suck = require('../'),
+var nconf = require('nconf'),
+    suck = require('../'),
     Captain = suck.Captain;
 
-// var hosts = [
-//     'mongo1.internal-exfm.com',
-//     'mongo2.internal-exfm.com',
-//     'mongo3.internal-exfm.com'
-// ];
+nconf.argv()
+    .env()
+    .use('memory');
 
-var hosts = ['localhost'];
+nconf.defaults({
+    'size': 100000,
+    'partitioner': '../examples/partitioner.js'
+});
 
-
-var captain = new Captain(100000);
-captain.startShip(require('../examples/partitioner.js'));
+var captain = new Captain(Number(nconf.get('size')));
+captain.startShip(require(nconf.get('partitioner')));
