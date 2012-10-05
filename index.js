@@ -80,7 +80,9 @@ Captain.prototype.get = function(k){
     if(this.hasOwnProperty(k)){
         return this[k];
     }
-    // @todo (lucas) Allow callable extras, ie random mongo host.
+    if(typeof this.extras[k] === 'function'){
+        return this.extras[k].apply(this, []);
+    }
     return this.extras[k];
 };
 
