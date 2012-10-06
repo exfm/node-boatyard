@@ -1,0 +1,36 @@
+body {
+  padding: 50px;
+  font: 14px "Lucida Grande", Helvetica, Arial, sans-serif;
+}
+
+a {
+  color: #00B7FF;
+}
+
+.notice{
+    font-style: italic;
+    color: #AAA;
+}
+
+#stage {
+    background: #FFF;
+    width: 80%;
+    overflow-y: scroll;
+}
+
+#roster {
+    width: 10%;
+    overflow-y: scroll;
+    float: right;
+}
+
+div.message span.name{
+    font-weight: bold;
+}
+div.message span.name:after{
+    content: ": "
+}
+
+div.message span.timestamp{
+    display: none;
+}

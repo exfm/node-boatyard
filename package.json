@@ -1,12 +1,18 @@
 {
-  "name": "mongosuck",
+  "name": "boatyard",
   "version": "0.0.0",
-  "description": "Suck things out of mongo, put them in dynamo/S3",
+  "description": "Make boats that get shit done.",
   "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "scripts": {},
+  "bin": {
+    "captain": "./bin/captain",
+    "mate": "./bin/mate",
+    "yard": "./bin/yard"
   },
-  "repository": "",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/exfm/node-boatyard.git"
+  },
   "author": "Lucas Hrabovsky",
   "license": "BSD",
   "dependencies": {
@@ -14,6 +20,9 @@
     "when": "git://github.com/exfm/when.git",
     "sequence": "2.2.1",
     "winston": "0.6.2",
-    "nconf": "0.6.4"
+    "nconf": "0.6.4",
+    "express": "3.0.x",
+    "jade": "0.27.5",
+    "socket.io": "0.9.10"
   }
 }
