@@ -105,6 +105,10 @@ function SSHClient(username, host, connectcb){
     this.command = null;
     this.lastError = null;
     this.cb = null;
+    this.interval = null;
+    this.working = true;
+    this.connected = false;
+    this.killedSafe = false;
 
 
     this.ssh = spawn('ssh', [username + '@' + host]);
@@ -113,41 +117,104 @@ function SSHClient(username, host, connectcb){
             self.connected = true;
             self.emit('connect');
         }
+        data = data.toString().replace('__SSHCLIENT__', '');
+
         console.log('stdout: ' + data);
+         if(self.cb){
+            self.cb(null, data);
+            self.cb = null;
+        }
+        self.working = false;
     });
 
     this.ssh.stderr.on('data', function (data) {
         if(data.toString() === "Pseudo-terminal will not be allocated because stdin is not a terminal.\r\n"){
             return;
         }
+        if(data.toString() === "Killed by signal 1.\r\n"){
+            return this.emit('close');
+        }
         self.lastError = data.toString();
         console.log('stderr: ' + JSON.stringify(data.toString()));
+        if(self.cb){
+            self.cb(new Error(data.toString()), null);
+            self.cb = null;
+        }
+        self.working = false;
     });
 
-    this.ssh.on('exit', function (code) {
-        if(code !==0){
+    this.ssh.on('exit', function (code, signal) {
+        if(code !==0 && self.killedSafe === false){
             setTimeout(function(){
                 self.emit('error', self.lastError);
                 // throw new Error(self.lastError);
             }, 50);
         }
+
         // console.log('child process exited with code ' + code);
     });
 
     this.on('connect', function(){
+        console.log('Got connect');
+        self.working = false;
+
+        connectcb();
+
         if(self.queue.length === 0){
             console.log('nothing in queue.');
         }
-        self.queue.forEach(function(item){
-
-        });
     });
+
+    this.interval = setInterval(function(){
+        if(self.queue.length > 0 && self.working === false){
+            var d = self.queue.shift();
+            self.cb = d[1];
+            console.log(d, self.ssh);
+            self.working = true;
+            console.log('calling '+d[0]);
+            self.ssh.stdin.write(d[0] +" ; echo __SSHCLIENT__;\n");
+        }
+    }, 50);
 }
 util.inherits(SSHClient, EventEmitter);
 
 SSHClient.prototype.exec = function(cmd, cb){
     this.queue.push([cmd, cb]);
 };
+
+SSHClient.prototype.close = function(){
+    clearInterval(this.interval);
+    this.killedSafe = true;
+    this.ssh.kill('SIGHUP');
+};
+
+SSHClient.prototype.cd = function(dir, cb){
+    this.exec("cd " + dir, cb);
+};
+
+function mkdir(username, host, dir, cb){
+    var client;
+    sequence().then(function(next){
+        client = new SSHClient(username, host, next);
+    }).then(function(next, err, out){
+        client.exec("mkdir -p " + dir, next);
+    }).then(function(next, err, out){
+        client.close();
+        cb(err, out);
+    });
+}
+
+function scp(user, host, localPath, remotePath, cb){
+    var c = [
+        'scp',
+        localPath,
+        user + '@' + host + ':' + remotePath
+    ];
+    exec(c.join(' '), function(error, stdout, stderr){
+        console.log(error, stdout, stderr);
+        cb(error, stdout, stderr);
+    });
+}
 
 cmds = {
     'build': function(){
@@ -193,35 +260,22 @@ cmds = {
         success(boatName + " has a new captain " + captainHost + "!");
     },
     'launch': function(){
-        var client = new SSHClient('ubuntu', 'lucas-dev.ex.fm');
-        client.on('error', function(out){
-            console.error('SSH Error:', out);
+        var client,
+            boatName = argv._[1],
+            user = 'ubuntu',
+            remoteHome = '/home/ubuntu/boatyard/' + boatName,
+            boat = configData.boats[boatName],
+            c = [];
+
+        sequence().then(function(next){
+            mkdir(user, boat.captain, remoteHome, next);
+        // scp partitioner
+        }).then(function(next){
+            progress('Uploading partitioner...');
+            scp(user, boat.captain, boat.partitioner, remoteHome + '/partitioner.js', next);
+        }).then(function(next, err, stderr, stdout){
+            console.log(err, stderr, stdout);
         });
-
-        // scp task and partitioner
-
-        // var boatName = argv._[1],
-        //     user = 'ubuntu',
-        //     remoteHome = '/home/ubuntu/boatyard/' + boatName,
-        //     boat = configData.boats[boatName],
-        //     c = [];
-
-        // sequence().then(function(next){
-        //     progress('Uploading partitioner...');
-        //     c = [
-        //         'scp',
-        //         boat.partitioner,
-        //         user + '@' + boat.captain + ':' + remoteHome + '/partitioner.js'
-        //     ];
-        //     exec(c.join(' '), function(error, stdout, stderr){
-        //         console.log(error, stdout, stderr);
-        //         next();
-        //     });
-        // }).then(function(next){
-
-        // }).then(function(next){
-
-        // });
 
         // install deps
 
