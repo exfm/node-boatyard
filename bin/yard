@@ -1,5 +1,232 @@
 #!/usr/bin/env node
-var server = require("../lib/app");
+"use strict";
 
-// Start the yard gui
-server.listen(3000);
+var optimist = require('optimist'),
+    argv = optimist.argv,
+    fs = require('fs'),
+    path = require('path'),
+    exec = require('child_process').exec,
+    spawn = require('child_process').spawn,
+    sequence = require('sequence'),
+    util = require('util'),
+    EventEmitter = require('events').EventEmitter,
+    cmd,
+    cmds,
+    sailboat = '\u26F5  ',
+    speedboat = '\uD83D\uDEA4  ',
+    rowboat = '\uD83D\uDEA3  ',
+    ship = '\uD83D\uDEA2  ',
+    holdinghands = '\uD83D\uDC6C  ',
+    man = '\uD83D\uDC73  ',
+    fire = '\uD83D\uDD25  ',
+    configData = {},
+    configPath = process.env.HOME + "/.boatyardrc";
+
+
+if(fs.existsSync(configPath)){
+    configData = JSON.parse(fs.readFileSync(configPath), 'utf-8');
+}
+else{
+    configData = {
+        'boats': {
+
+        }
+    };
+}
+
+function saveConfig(){
+    fs.writeFileSync(configPath, JSON.stringify(configData, null, 4), 'utf-8');
+}
+
+var help = [
+    'Do things with boats!',
+    '\n',
+    'Commands:',
+    '    '+speedboat+'yard build -b <boat> -p <partitioner> -t <task>',
+    '       Build a new boat.',
+    '',
+    '    '+man+'yard addcaptain <boatname> <captainhostname>',
+    '       Add a new captain to a boat.',
+    '',
+    '    '+rowboat+'yard addmate <boatname> <hostname>',
+    '       Put a mate on the boat.',
+    '',
+    '    '+holdinghands+'yard addhands <boatname> <matehost> <howmany>',
+    '       Set the number of hands a mate should command.',
+    '',
+    '    '+rowboat+'yard dep <boatname> <package> <version>',
+    '       Add a dependency that will be installed on captains and mates.',
+    '',
+    '    '+ship+'yard launch <boatname>',
+    '       Deploy code and start running a job!',
+    '',
+    '    '+fire+'yard crash <boatname>',
+    '       Crash a boat, killing everyone onboard.'
+];
+
+argv = optimist
+    .alias('h', 'help')
+    .describe('h', 'Show help')
+    .alias('b', 'boat')
+    .describe('b', 'Boat name')
+    .alias('t', 'task')
+    .describe('t', 'Path to task function')
+    .alias('p', 'partitioner')
+    .describe('p', 'Path to partitioner function')
+    .argv;
+
+cmd = argv._[0];
+
+if(cmd === undefined || argv.h){
+    argv = optimist.usage(help.join("\n")).argv;
+    return optimist.showHelp();
+}
+
+// Placeholders
+function success(msg){
+    console.log(msg);
+}
+
+function error(msg){
+    console.error(msg);
+}
+
+function progress(msg){
+    console.log(msg+'...');
+}
+
+function SSHClient(username, host, connectcb){
+    var self = this;
+
+    this.username = username;
+    this.host = host;
+    this.ready = false;
+    this.queue = [];
+    this.command = null;
+    this.lastError = null;
+    this.cb = null;
+
+
+    this.ssh = spawn('ssh', [username + '@' + host]);
+    this.ssh.stdout.on('data', function (data){
+        if(self.connected === false){
+            self.connected = true;
+            self.emit('connect');
+        }
+        console.log('stdout: ' + data);
+    });
+
+    this.ssh.stderr.on('data', function (data) {
+        if(data.toString() === "Pseudo-terminal will not be allocated because stdin is not a terminal.\r\n"){
+            return;
+        }
+        self.lastError = data.toString();
+        console.log('stderr: ' + JSON.stringify(data.toString()));
+    });
+
+    this.ssh.on('exit', function (code) {
+        if(code !==0){
+            setTimeout(function(){
+                self.emit('error', self.lastError);
+                // throw new Error(self.lastError);
+            }, 50);
+        }
+        // console.log('child process exited with code ' + code);
+    });
+
+    this.on('connect', function(){
+        if(self.queue.length === 0){
+            console.log('nothing in queue.');
+        }
+        self.queue.forEach(function(item){
+
+        });
+    });
+}
+util.inherits(SSHClient, EventEmitter);
+
+SSHClient.prototype.exec = function(cmd, cb){
+    this.queue.push([cmd, cb]);
+};
+
+cmds = {
+    'build': function(){
+        argv = optimist
+            .demand(['b', 't', 'p'])
+            .usage('Usage: yard build -b <boatname> -t <taskfile> -p <patitionerfile>')
+            .argv;
+
+        var boatName = argv.b,
+            task = path.resolve(argv.t),
+            partitioner = path.resolve(argv.p);
+
+        configData.boats[boatName] = {
+            'task': task,
+            'partitioner': partitioner,
+            'out': false,
+            'captain': null,
+            'mates': [],
+            'hands': {},
+            'dependencies': {}
+        };
+        saveConfig();
+        success('Boat built!');
+    },
+    'list': function(){
+        console.log(JSON.stringify(configData, null, 4));
+    },
+    'dep': function(){
+        var boatName = argv._[1],
+            packageName = argv._[2],
+            version = argv._[3];
+
+        configData.boats[boatName].dependencies[packageName] = version;
+        saveConfig();
+        success("Added dep " + packageName + "==" + version + " to boat "+boatName);
+    },
+    'addcaptain': function(){
+        var boatName = argv._[1],
+            captainHost = argv._[2];
+
+        configData.boats[boatName].captain = captainHost;
+        saveConfig();
+        success(boatName + " has a new captain " + captainHost + "!");
+    },
+    'launch': function(){
+        var client = new SSHClient('ubuntu', 'lucas-dev.ex.fm');
+        client.on('error', function(out){
+            console.error('SSH Error:', out);
+        });
+
+        // scp task and partitioner
+
+        // var boatName = argv._[1],
+        //     user = 'ubuntu',
+        //     remoteHome = '/home/ubuntu/boatyard/' + boatName,
+        //     boat = configData.boats[boatName],
+        //     c = [];
+
+        // sequence().then(function(next){
+        //     progress('Uploading partitioner...');
+        //     c = [
+        //         'scp',
+        //         boat.partitioner,
+        //         user + '@' + boat.captain + ':' + remoteHome + '/partitioner.js'
+        //     ];
+        //     exec(c.join(' '), function(error, stdout, stderr){
+        //         console.log(error, stdout, stderr);
+        //         next();
+        //     });
+        // }).then(function(next){
+
+        // }).then(function(next){
+
+        // });
+
+        // install deps
+
+
+    }
+};
+
+cmds[cmd]();

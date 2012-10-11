@@ -3,9 +3,10 @@
 "use strict";
 
 var nconf = require('nconf'),
-    suck = require('../'),
-    Captain = suck.Captain,
-    Ship = suck.Ship;
+    path = require('path'),
+    yard = require('../'),
+    Captain = yard.Captain,
+    Boat = yard.Boat;
 
 nconf.argv()
     .env()
@@ -14,11 +15,12 @@ nconf.argv()
 nconf.defaults({
     'size': 100000,
     'partitioner': '../examples/partitioner.js',
-    'ship': 'example-partitioner',
+    'boat': 'example-partitioner',
+    'yard': 'http://localhost:3000',
     'mongoHosts': ['localhost']
 });
 
-var captain = new Captain(Number(nconf.get('size')),
-    new Ship(nconf.get('ship')));
+var boat = new Boat(nconf.get('boat'), nconf.get('yard')),
+    captain = new Captain(Number(nconf.get('size')), boat);
 
-captain.startShip(require(nconf.get('partitioner')));
+captain.startBoat(require(path.resolve(nconf.get('partitioner'))));

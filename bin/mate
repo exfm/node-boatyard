@@ -3,6 +3,7 @@
 "use strict";
 
 var os = require('os'),
+    path = require('path'),
     nconf = require('nconf'),
     cluster = require('cluster'),
     winston = require('winston'),
@@ -22,9 +23,10 @@ nconf.defaults({
 
 var yard = require('../'),
     Mate = yard.Mate,
-    Hand = yard.Hand;
+    Hand = yard.Hand,
+    taskPath = path.resolve(nconf.get('task'));
 
-task = require(nconf.get('task'));
+task = require(taskPath);
 
 if (cluster.isMaster){
     new Mate(hostname, nconf.get('captain'), Number(nconf.get('hands')))
