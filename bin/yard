@@ -298,6 +298,15 @@ cmds = {
         saveConfig();
         success(boatName + " has a new mate " + mateHost + "!");
     },
+    'addhands': function(){
+        var boatName = argv._[1],
+            mateHost = argv._[2],
+            numHands = argv._[3];
+
+        configData.boats[boatName].hands[mateHost] = numHands;
+        saveConfig();
+        success("Mate " + mateHost + " will manage " + numHands + " on boat " + boatName + "!");
+    },
     'launch': function(){
         var client,
             boatName = argv._[1],
