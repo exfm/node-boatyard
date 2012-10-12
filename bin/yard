@@ -111,12 +111,13 @@ function SSHClient(username, host, connectcb){
     this.working = true;
     this.connected = false;
     this.killedSafe = false;
-    var outBuff = "";
+    var outBuff = "",
+        out;
 
 
     this.ssh = spawn('ssh', ['-t', '-t', username + '@' + host]);
     this.ssh.stdout.on('data', function (data){
-        console.log('stdout: ' + data);
+        // console.log('stdout: ' + data);
         if(self.connected === false){
             self.connected = true;
             self.working = false;
@@ -130,11 +131,16 @@ function SSHClient(username, host, connectcb){
 
         // console.log(JSON.stringify(data.toString()), isEnd);
 
-        data = data.toString().replace('__SSHCLIENT__', '');
-         if(self.cb && isEnd){
+        // data = data.toString().replace('__SSHCLIENT__', '');
+        if(self.cb && isEnd){
             outBuff = outBuff.split("echo __SSHCLIENT__;\r\n");
-            // console.log('Sending buffer to callback ' + outBuff[1]);
-            self.cb(null, outBuff[1]);
+            out = (outBuff[1] && outBuff[1].length > 0) ? outBuff[1] : 'OK: ' + outBuff[0];
+            out = out.replace("\r\n__SSHCLIENT__\r\n", "");
+            // console.log(JSON.stringify(out));
+
+            progress('<<< '+ self.username + '@' + self.host + ': ' + out);
+            self.cb(null, out);
+
             outBuff = "";
             self.cb = null;
         }
@@ -142,7 +148,7 @@ function SSHClient(username, host, connectcb){
     });
 
     this.ssh.stderr.on('data', function (data) {
-        console.log('stderr: ', data.toString());
+        // console.log('stderr: ', data.toString());
         if(data.toString() === "Pseudo-terminal will not be allocated because stdin is not a terminal.\r\n"){
             return;
         }
@@ -167,12 +173,10 @@ function SSHClient(username, host, connectcb){
     this.ssh.on('exit', function (code, signal) {
         if(code !==0 && self.killedSafe === false){
             setTimeout(function(){
+                console.error('Exited', self.lastError);
                 self.emit('error', self.lastError);
-                // throw new Error(self.lastError);
             }, 50);
         }
-
-        console.log('child process exited with code ' + code);
     });
 
     this.on('connect', function(){
@@ -189,9 +193,8 @@ function SSHClient(username, host, connectcb){
         if(self.queue.length > 0 && self.working === false){
             var d = self.queue.shift();
             self.cb = d[1];
-            // console.log(d, self.ssh);
             self.working = true;
-            console.log('calling '+d[0]);
+            progress('>>> '+ self.username + '@' + self.host + ': ' + d[0]);
             self.ssh.stdin.write(d[0] +" ; echo __SSHCLIENT__;\n");
         }
     }, 1000);
@@ -230,8 +233,8 @@ function scp(user, host, localPath, remotePath, cb){
         localPath,
         user + '@' + host + ':' + remotePath
     ];
+    progress(">>> " + c.join(' '));
     exec(c.join(' '), function(error, stdout, stderr){
-        console.log(error, stdout, stderr);
         cb(error, stdout, stderr);
     });
 }
@@ -375,6 +378,8 @@ cmds = {
                     });
                 return d.promise;
             }), next);
+        }).then(function(next){
+            success("Boat is out at sea!");
         });
     }
 };
