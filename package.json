@@ -26,6 +26,7 @@
     "socket.io": "0.9.10",
     "browserify": "git://github.com/exfm/node-browserify",
     "leveldb": "0.7.1",
-    "request": "2.11.4"
+    "request": "2.11.4",
+    "underscore": "1.4.2"
   }
 }

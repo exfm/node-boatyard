@@ -11,6 +11,7 @@ var optimist = require('optimist'),
     util = require('util'),
     EventEmitter = require('events').EventEmitter,
     when = require('when'),
+    _ = require('underscore'),
     cmd,
     cmds,
     sailboat = '\u26F5  ',
@@ -110,33 +111,52 @@ function SSHClient(username, host, connectcb){
     this.working = true;
     this.connected = false;
     this.killedSafe = false;
+    var outBuff = "";
 
 
-    this.ssh = spawn('ssh', [username + '@' + host]);
+    this.ssh = spawn('ssh', ['-t', '-t', username + '@' + host]);
     this.ssh.stdout.on('data', function (data){
+        console.log('stdout: ' + data);
         if(self.connected === false){
             self.connected = true;
-            self.emit('connect');
+            self.working = false;
+            return self.exec('pwd', function(){
+                self.emit('connect');
+            });
         }
-        data = data.toString().replace('__SSHCLIENT__', '');
 
-        console.log('stdout: ' + data);
-         if(self.cb){
-            self.cb(null, data);
+        var isEnd = data.toString().indexOf('__SSHCLIENT__\r\n') > -1;
+        outBuff += data.toString();
+
+        // console.log(JSON.stringify(data.toString()), isEnd);
+
+        data = data.toString().replace('__SSHCLIENT__', '');
+         if(self.cb && isEnd){
+            outBuff = outBuff.split("echo __SSHCLIENT__;\r\n");
+            // console.log('Sending buffer to callback ' + outBuff[1]);
+            self.cb(null, outBuff[1]);
+            outBuff = "";
             self.cb = null;
         }
         self.working = false;
     });
 
     this.ssh.stderr.on('data', function (data) {
+        console.log('stderr: ', data.toString());
         if(data.toString() === "Pseudo-terminal will not be allocated because stdin is not a terminal.\r\n"){
             return;
         }
         if(data.toString() === "Killed by signal 1.\r\n"){
             return this.emit('close');
         }
+        if(data.toString().toLowerCase().indexOf('warn') > -1){
+            return;
+        }
+        if(data.toString().indexOf('No README.md' > -1)){
+            return;
+        }
         self.lastError = data.toString();
-        console.log('stderr: ' + JSON.stringify(data.toString()));
+
         if(self.cb){
             self.cb(new Error(data.toString()), null);
             self.cb = null;
@@ -152,7 +172,7 @@ function SSHClient(username, host, connectcb){
             }, 50);
         }
 
-        // console.log('child process exited with code ' + code);
+        console.log('child process exited with code ' + code);
     });
 
     this.on('connect', function(){
@@ -174,7 +194,7 @@ function SSHClient(username, host, connectcb){
             console.log('calling '+d[0]);
             self.ssh.stdin.write(d[0] +" ; echo __SSHCLIENT__;\n");
         }
-    }, 50);
+    }, 1000);
 }
 util.inherits(SSHClient, EventEmitter);
 
@@ -285,7 +305,7 @@ cmds = {
             remoteHome = '/home/ubuntu/boatyard/' + boatName,
             boat = configData.boats[boatName],
             c = [],
-            allHosts = boat.mates.push(boat.captain),
+            allHosts = _.union(boat.mates, [boat.captain]),
             pkg = {
                 'name': '',
                 'version': '0.0.0',
@@ -293,6 +313,8 @@ cmds = {
             };
 
         sequence().then(function(next){
+            next();
+        }).then(function(next){
             mkdir(user, boat.captain, remoteHome, next);
 
         // scp partitioner
@@ -325,6 +347,21 @@ cmds = {
                 var d = when.defer();
                 progress('Uploading to mate ' + mateHost);
                 putFile(user, mateHost, JSON.stringify(pkg, null, 4), remoteHome + '/package.json', d.resolve);
+                return d.promise;
+            }), next);
+
+        // Install packages
+        }).then(function(next){
+            when.all(allHosts.map(function(host){
+                var d = when.defer(),
+                    c = new SSHClient(user, host, function(){
+                        c.exec('cd ' + remoteHome, function(){
+                            c.exec('npm install', function(){
+                                c.close();
+                                d.resolve(host);
+                            });
+                        });
+                    });
                 return d.promise;
             }), next);
         });
