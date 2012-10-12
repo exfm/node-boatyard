@@ -265,7 +265,9 @@ cmds = {
             'captain': null,
             'mates': [],
             'hands': {},
-            'dependencies': {}
+            'dependencies': {
+                "boatyard": "git://github.com/exfm/node-boatyard.git"
+            }
         };
         saveConfig();
         success('Boat built!');
