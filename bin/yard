@@ -10,6 +10,7 @@ var optimist = require('optimist'),
     sequence = require('sequence'),
     util = require('util'),
     EventEmitter = require('events').EventEmitter,
+    when = require('when'),
     cmd,
     cmds,
     sailboat = '\u26F5  ',
@@ -155,13 +156,12 @@ function SSHClient(username, host, connectcb){
     });
 
     this.on('connect', function(){
-        console.log('Got connect');
         self.working = false;
 
         connectcb();
 
         if(self.queue.length === 0){
-            console.log('nothing in queue.');
+            return;
         }
     });
 
@@ -169,7 +169,7 @@ function SSHClient(username, host, connectcb){
         if(self.queue.length > 0 && self.working === false){
             var d = self.queue.shift();
             self.cb = d[1];
-            console.log(d, self.ssh);
+            // console.log(d, self.ssh);
             self.working = true;
             console.log('calling '+d[0]);
             self.ssh.stdin.write(d[0] +" ; echo __SSHCLIENT__;\n");
@@ -216,6 +216,17 @@ function scp(user, host, localPath, remotePath, cb){
     });
 }
 
+function putFile(user, host, contents, remotePath, cb){
+    var tmpPath = 'file.' + (Math.random() * 100);
+    fs.writeFile(tmpPath, contents, 'utf-8', function(err){
+        scp(user, host, tmpPath, remotePath, function(){
+            fs.unlink(tmpPath, function(){
+                cb();
+            });
+        });
+    });
+}
+
 cmds = {
     'build': function(){
         argv = optimist
@@ -259,27 +270,64 @@ cmds = {
         saveConfig();
         success(boatName + " has a new captain " + captainHost + "!");
     },
+    'addmate': function(){
+        var boatName = argv._[1],
+            mateHost = argv._[2];
+
+        configData.boats[boatName].mates.push(mateHost);
+        saveConfig();
+        success(boatName + " has a new mate " + mateHost + "!");
+    },
     'launch': function(){
         var client,
             boatName = argv._[1],
             user = 'ubuntu',
             remoteHome = '/home/ubuntu/boatyard/' + boatName,
             boat = configData.boats[boatName],
-            c = [];
+            c = [],
+            allHosts = boat.mates.push(boat.captain),
+            pkg = {
+                'name': '',
+                'version': '0.0.0',
+                'dependencies': boat.dependencies
+            };
 
         sequence().then(function(next){
             mkdir(user, boat.captain, remoteHome, next);
+
         // scp partitioner
         }).then(function(next){
-            progress('Uploading partitioner...');
+            progress('Uploading partitioner');
             scp(user, boat.captain, boat.partitioner, remoteHome + '/partitioner.js', next);
-        }).then(function(next, err, stderr, stdout){
-            console.log(err, stderr, stdout);
+
+        // scp task
+        }).then(function(next){
+            progress('Uploading task');
+            when.all(boat.mates.map(function(mateHost){
+                var d = when.defer();
+                progress('Uploading to mate ' + mateHost);
+                scp(user, mateHost, boat.task, remoteHome + '/task.js', d.resolve);
+                return d.promise;
+            }), next);
+
+        // Create package.json on captain
+        }).then(function(next){
+            progress('Creating captain package.json');
+            pkg.name = "boatyard-" + boatName + "-captain";
+            putFile(user, boat.captain, JSON.stringify(pkg, null, 4), remoteHome + '/package.json', function(){
+                next();
+            });
+        }).then(function(next){
+            progress('Creating package.json for mates');
+            pkg.name = "boatyard-" + boatName + "-mate";
+
+            when.all(boat.mates.map(function(mateHost){
+                var d = when.defer();
+                progress('Uploading to mate ' + mateHost);
+                putFile(user, mateHost, JSON.stringify(pkg, null, 4), remoteHome + '/package.json', d.resolve);
+                return d.promise;
+            }), next);
         });
-
-        // install deps
-
-
     }
 };
 
