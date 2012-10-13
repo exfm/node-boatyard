@@ -423,7 +423,7 @@ cmds = {
                         args.push('--' + name + ' ' + boat.stowaways[name]);
                     });
 
-                    c.exec('node ./captain '+ args.join(' ') +' > captain.log', function(){
+                    c.exec('./captain '+ args.join(' ') +' > captain.log &', function(){
                         progress('Captain awake at ' + boat.captain + '!');
                         c.close();
                         next();
@@ -452,7 +452,7 @@ cmds = {
                             if(boat.hands.hasOwnProperty(mateHost)){
                                 mateArgs.push('--hands ' + boat.hands[mateHost]);
                             }
-                            c.exec('node ./mate '+ mateArgs.join(' ') +'> mate.log', function(){
+                            c.exec('./mate '+ mateArgs.join(' ') +'> mate.log &', function(){
                                 progress('Mate ' + mateHost + ' ready for battle!');
                                 c.close();
                             });
