@@ -269,7 +269,11 @@ cmds = {
             'mates': [],
             'hands': {},
             'dependencies': {
-                "boatyard": "git://github.com/exfm/node-boatyard.git"
+                "boatyard": "git://github.com/exfm/node-boatyard.git",
+                "when": "git://github.com/exfm/when.git",
+                "sequence": "2.2.1",
+                "winston": "0.6.2",
+                "nconf": "0.6.4"
             }
         };
         saveConfig();
@@ -323,7 +327,8 @@ cmds = {
             pkg = {
                 'name': '',
                 'version': '0.0.0',
-                'dependencies': boat.dependencies
+                'dependencies': boat.dependencies,
+                'boat': boat
             };
 
         sequence().then(function(next){
@@ -373,6 +378,34 @@ cmds = {
                             c.exec('npm install', function(){
                                 c.close();
                                 d.resolve(host);
+                            });
+                        });
+                    });
+                return d.promise;
+            }), next);
+
+        // Wake the captain!
+        }).then(function(next){
+            var c = new SSHClient(user, boat.captain, function(){
+                c.exec('cd ' + remoteHome, function(){
+                    c.exec('node captain > captain.log', function(){
+                        progress('Captain awake at ' + boat.captain + '!');
+                        c.close();
+                        next();
+                    });
+                });
+            });
+
+        // Mates to arms!
+        }).then(function(next){
+            progress('Mates! To arms!');
+            when.all(boat.mates.map(function(mateHost){
+                var d = when.defer(),
+                    c = new SSHClient(user, mateHost, function(){
+                        c.exec('cd ' + remoteHome, function(){
+                            c.exec('node mate > mate.log', function(){
+                                progress('Mate ' + mateHost + ' ready for battle!');
+                                c.close();
                             });
                         });
                     });
