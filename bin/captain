@@ -4,7 +4,7 @@
 
 var nconf = require('nconf'),
     path = require('path'),
-    yard = require('../'),
+    yard = require('boatyard'),
     Captain = yard.Captain,
     Boat = yard.Boat;
 

@@ -21,7 +21,7 @@ nconf.defaults({
     'task': '../examples/task.js'
 });
 
-var yard = require('../'),
+var yard = require('boatyard'),
     Mate = yard.Mate,
     Hand = yard.Hand,
     taskPath = path.resolve(nconf.get('task'));

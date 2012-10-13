@@ -8,12 +8,15 @@ var nconf = require('nconf'),
 module.exports = function(cb){
     var db,
         self = this,
+        // Use nconf to grab stowaways
         hosts = nconf.get('mongoHosts'),
         opts = {
             'slave_ok': true,
             'native_parser': true
         }, partitions = [];
 
+    // Put some stowaways on the captain so they'll also be reflected in
+    // handed out partitions.
     this.set('dbName', nconf.get('dbName'));
     this.set('collectionName', nconf.get('collectionName'));
     this.set('mongoHost', function(){

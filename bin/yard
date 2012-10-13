@@ -268,6 +268,8 @@ cmds = {
             'captain': null,
             'mates': [],
             'hands': {},
+            'stowaways': {},
+            'name': boatName,
             'dependencies': {
                 "boatyard": "git://github.com/exfm/node-boatyard.git",
                 "when": "git://github.com/exfm/when.git",
@@ -298,6 +300,15 @@ cmds = {
         configData.boats[boatName].captain = captainHost;
         saveConfig();
         success(boatName + " has a new captain " + captainHost + "!");
+    },
+    'addstowaway': function(){
+        var boatName = argv._[1],
+            name = argv._[2],
+            value = argv._[3];
+
+        configData.boats[boatName].stowaways[name] = value;
+        saveConfig();
+        success(boatName + " has a new stowaway " + name + ": "+ value +"!");
     },
     'addmate': function(){
         var boatName = argv._[1],
@@ -384,11 +395,35 @@ cmds = {
                 return d.promise;
             }), next);
 
+        // Put captain executable
+        }).then(function(next){
+            scp(user, boat.captain, __dirname + "/captain",
+                remoteHome + "/captain", next);
+
+        // Put the mate executable
+        }).then(function(next){
+            when.all(boat.mates.map(function(mateHost){
+                var d = when.defer();
+                progress('Uploading to mate ' + mateHost);
+                scp(user, boat.captain, __dirname + "/mate",
+                    remoteHome + "/mate", d.resolve);
+                return d.promise;
+            }), next);
+
         // Wake the captain!
         }).then(function(next){
             var c = new SSHClient(user, boat.captain, function(){
                 c.exec('cd ' + remoteHome, function(){
-                    c.exec('node captain > captain.log', function(){
+                    var args = [
+                        '--size 100000',
+                        '--boat ' + boat.name,
+                        '--partitioner ' + remoteHome + '/partitioner.js'
+                    ];
+                    Object.keys(boat.stowaways).forEach(function(name){
+                        args.push('--' + name + ' ' + boat.stowaways[name]);
+                    });
+
+                    c.exec('node ./captain '+ args.join(' ') +' > captain.log', function(){
                         progress('Captain awake at ' + boat.captain + '!');
                         c.close();
                         next();
@@ -399,11 +434,25 @@ cmds = {
         // Mates to arms!
         }).then(function(next){
             progress('Mates! To arms!');
+
+            var args = [
+                '--captain ' + boat.captain,
+                '--boat ' + boat.name,
+                '--task ' + remoteHome + '/task.js'
+            ];
+            Object.keys(boat.stowaways).forEach(function(name){
+                args.push('--' + name + ' ' + boat.stowaways[name]);
+            });
+
             when.all(boat.mates.map(function(mateHost){
-                var d = when.defer(),
+                var mateArgs = args.slice(0),
+                    d = when.defer(),
                     c = new SSHClient(user, mateHost, function(){
                         c.exec('cd ' + remoteHome, function(){
-                            c.exec('node mate > mate.log', function(){
+                            if(boat.hands.hasOwnProperty(mateHost)){
+                                mateArgs.push('--hands ' + boat.hands[mateHost]);
+                            }
+                            c.exec('node ./mate '+ mateArgs.join(' ') +'> mate.log', function(){
                                 progress('Mate ' + mateHost + ' ready for battle!');
                                 c.close();
                             });
