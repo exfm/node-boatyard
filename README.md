@@ -4,9 +4,9 @@ A helper for getting distributed Javascript jobs done with adhoc deploys.
 
 To use boatyard, you just define two javascript functions:
 
-* [partitioner](examples/mongo/partitioner.js) - Divide up a large chunk of work into smaller chunks, ie break a collection of 1 million documents in 100,000 document chunks.
+* [partitioner](node-boatyard/blob/master/examples/mongo/partitioner.js) - Divide up a large chunk of work into smaller chunks, ie break a collection of 1 million documents in 100,000 document chunks.
 
-* [task](examples/mongo/task.js) - Do work with a partition, ie read 100,000 documents from a mongo collection and put them on S3.
+* [task](node-boatyard/blob/master/examples/mongo/task.js) - Do work with a partition, ie read 100,000 documents from a mongo collection and put them on S3.
 
 ## Getting Started
 
@@ -17,7 +17,7 @@ Now you'll have the `yard` bin that provides lots of helpers.  To get started, b
     mkdir myboat && cd myboat && touch task.js partitioner.js
     yard build myboat task.js partitioner.js
 
-`build` will generate a `boat.json` config file for now.  Note: you can bail on yard at any time and just edit the generated `boat.json` file (todo in the future this will just be a package.json file).  You can just copy and paste [examples/simple/task.js](examples/simple/task.js) and [examples/simple/partitioner.js](examples/simple/partitioner.js) to `myboat` for now.
+`build` will generate a `boat.json` config file for now.  Note: you can bail on yard at any time and just edit the generated `boat.json` file (todo in the future this will just be a package.json file).  You can just copy and paste [examples/simple/task.js](node-boatyard/blob/master/examples/simple/task.js) and [examples/simple/partitioner.js](node-boatyard/blob/master/examples/simple/partitioner.js) to `myboat` for now.
 
 When you launch your boat later, a `package.json` file will be pushed to the captain and mates and then npm-install'd.
 
@@ -43,7 +43,7 @@ Ok ready to launch our boat and get some shit done.  All we need is node and npm
 
 ## Task flow
 
-When a hand is finished with a partition, it calls `self.release` and `self.getMoreWorkToDo`.  When `release` is called, the mate tells the captain the hand is finished with the partition and it can be marked as complete.  When `getMoreWorkTodo` is called, the mate asks the captain for another partition.  If there is an available partition, the captain sends it to the mate, marks it as inflight and the mate passes it along to the hand.  If there are no more available partitions, the mate kills the hand (cluster.worker.destroy).  If the mate has no remaining hands, it throws it self off the boat (`mate.server.close()`).  When the captain has no more available partitions and no partitions in flight, he kills himself.  Prefer pictures?  [Checkout this diagram](docs/images/hand_and_mate.jpg).
+When a hand is finished with a partition, it calls `self.release` and `self.getMoreWorkToDo`.  When `release` is called, the mate tells the captain the hand is finished with the partition and it can be marked as complete.  When `getMoreWorkTodo` is called, the mate asks the captain for another partition.  If there is an available partition, the captain sends it to the mate, marks it as inflight and the mate passes it along to the hand.  If there are no more available partitions, the mate kills the hand (cluster.worker.destroy).  If the mate has no remaining hands, it throws it self off the boat (`mate.server.close()`).  When the captain has no more available partitions and no partitions in flight, he kills himself.  Prefer pictures?  [Checkout this diagram](node-boatyard/blob/master/docs/images/hand_and_mate.jpg).
 
 ## Stowaways
 
