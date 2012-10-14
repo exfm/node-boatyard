@@ -11,4 +11,4 @@ module.exports.Captain = require('./lib/captain');
 module.exports.Mate = require('./lib/mate');
 module.exports.Hand = require('./lib/hand');
 module.exports.Boat = require('./lib/boat');
-module.exports.logger = winston.loggers.get('shipyard');
+module.exports.logger = winston.loggers.get('boatyard');
