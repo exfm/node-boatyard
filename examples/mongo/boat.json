@@ -1,0 +1,26 @@
+{
+    "task": "task.js",
+    "name": "mongo",
+    "partitioner": "partitioner.js",
+    "captain": "localhost",
+    "size": 100000,
+    "mates": [
+        "localhost"
+    ],
+    "hands": {},
+    "stowaways": {
+        "mongoHosts": ["localhost"],
+        "dbName": "main",
+        "collectionName": "song"
+    },
+    "dependencies": {
+        "mongodb": "1.1.11",
+        "sequence": "2.2.1",
+        "plata": "0.0.6",
+        "when": "git://github.com/exfm/when.git",
+        "sequence": "2.2.1",
+        "winston": "0.6.2",
+        "nconf": "0.6.4",
+        "boatyard": "git://github.com/exfm/node-boatyard.git"
+    }
+}

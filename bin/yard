@@ -21,19 +21,12 @@ var optimist = require('optimist'),
     holdinghands = '\uD83D\uDC6C  ',
     man = '\uD83D\uDC73  ',
     fire = '\uD83D\uDD25  ',
+    localConfig = false,
     configData = {},
-    configPath = process.env.HOME + "/.boatyardrc";
-
+    configPath = process.env.PWD + "/boat.json";
 
 if(fs.existsSync(configPath)){
     configData = JSON.parse(fs.readFileSync(configPath), 'utf-8');
-}
-else{
-    configData = {
-        'boats': {
-
-        }
-    };
 }
 
 function saveConfig(){
@@ -265,15 +258,14 @@ cmds = {
             task = path.resolve(argv.t),
             partitioner = path.resolve(argv.p);
 
-        configData.boats[boatName] = {
+        configData = {
+            'name': boatName,
             'task': task,
             'partitioner': partitioner,
-            'out': false,
             'captain': null,
             'mates': [],
             'hands': {},
             'stowaways': {},
-            'name': boatName,
             'dependencies': {
                 "boatyard": "git://github.com/exfm/node-boatyard.git",
                 "when": "git://github.com/exfm/when.git",
@@ -293,7 +285,7 @@ cmds = {
             packageName = argv._[2],
             version = argv._[3];
 
-        configData.boats[boatName].dependencies[packageName] = version;
+        configData.dependencies[packageName] = version;
         saveConfig();
         success("Added dep " + packageName + "==" + version + " to boat "+boatName);
     },
@@ -301,7 +293,7 @@ cmds = {
         var boatName = argv._[1],
             captainHost = argv._[2];
 
-        configData.boats[boatName].captain = captainHost;
+        configData.captain = captainHost;
         saveConfig();
         success(boatName + " has a new captain " + captainHost + "!");
     },
@@ -310,7 +302,7 @@ cmds = {
             name = argv._[2],
             value = argv._[3];
 
-        configData.boats[boatName].stowaways[name] = value;
+        configData.stowaways[name] = value;
         saveConfig();
         success(boatName + " has a new stowaway " + name + ": "+ value +"!");
     },
@@ -318,7 +310,7 @@ cmds = {
         var boatName = argv._[1],
             mateHost = argv._[2];
 
-        configData.boats[boatName].mates.push(mateHost);
+        configData.mates.push(mateHost);
         saveConfig();
         success(boatName + " has a new mate " + mateHost + "!");
     },
@@ -327,7 +319,7 @@ cmds = {
             mateHost = argv._[2],
             numHands = argv._[3];
 
-        configData.boats[boatName].hands[mateHost] = numHands;
+        configData.hands[mateHost] = numHands;
         saveConfig();
         success("Mate " + mateHost + " will manage " + numHands + " on boat " + boatName + "!");
     },
@@ -336,7 +328,7 @@ cmds = {
             boatName = argv._[1],
             user = 'ubuntu',
             remoteHome = '/home/ubuntu/boatyard/' + boatName,
-            boat = configData.boats[boatName],
+            boat = configData,
             c = [],
             allHosts = _.union(boat.mates, [boat.captain]),
             pkg = {
