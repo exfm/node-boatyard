@@ -43,7 +43,7 @@ Ok ready to launch our boat and get some shit done.  All we need is node and npm
 
 ## Task flow
 
-When a hand is finished with a partition, it calls `self.release` and `self.getMoreWorkToDo`.  When `release` is called, the mate tells the captain the hand is finished with the partition and it can be marked as complete.  When `getMoreWorkTodo` is called, the mate asks the captain for another partition.  If there is an available partition, the captain sends it to the mate, marks it as inflight and the mate passes it along to the hand.  If there are no more available partitions, the mate kills the hand (cluster.worker.destroy).  If the mate has no remaining hands, it throws it self off the boat (`mate.server.close()`).  When the captain has no more available partitions and no partitions in flight, he kills himself.  Prefer pictures?  [Checkout this diagram](node-boatyard/blob/master/docs/images/hand_and_mate.jpg).
+When a hand is finished with a partition, it calls `self.release` and `self.getMoreWorkToDo`.  When `release` is called, the mate tells the captain the hand is finished with the partition and it can be marked as complete.  When `getMoreWorkTodo` is called, the mate asks the captain for another partition.  If there is an available partition, the captain sends it to the mate, marks it as inflight and the mate passes it along to the hand.  If there are no more available partitions, the mate kills the hand (cluster.worker.destroy).  If the mate has no remaining hands, it throws it self off the boat (`mate.server.close()`).  When the captain has no more available partitions and no partitions in flight, he kills himself.  Prefer pictures?  [Check out this diagram](node-boatyard/blob/master/docs/images/hand_and_mate.jpg).
 
 ## Stowaways
 
