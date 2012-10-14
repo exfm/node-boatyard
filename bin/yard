@@ -195,7 +195,11 @@ function SSHClient(username, host, connectcb){
             self.cb = d[1];
             self.working = true;
             progress('>>> '+ self.username + '@' + self.host + ': ' + d[0]);
-            self.ssh.stdin.write(d[0] +" ; echo __SSHCLIENT__;\n");
+            var s = '';
+            if(d[0].charAt(d[0].length - 1) !== "&"){
+                s = ";";
+            }
+            self.ssh.stdin.write(d[0] + s + " echo __SSHCLIENT__;\n");
         }
     }, 1000);
 }
@@ -452,7 +456,7 @@ cmds = {
                             if(boat.hands.hasOwnProperty(mateHost)){
                                 mateArgs.push('--hands ' + boat.hands[mateHost]);
                             }
-                            c.exec('./mate '+ mateArgs.join(' ') +'> mate.log &', function(){
+                            c.exec('./mate '+ mateArgs.join(' ') +' > mate.log &', function(){
                                 progress('Mate ' + mateHost + ' ready for battle!');
                                 c.close();
                             });
