@@ -16,8 +16,7 @@ nconf.defaults({
     'size': 100000,
     'partitioner': '../examples/partitioner.js',
     'boat': 'example-partitioner',
-    'yard': 'http://localhost:3000',
-    'mongoHosts': ['localhost']
+    'yard': 'http://localhost:3000'
 });
 
 var boat = new Boat(nconf.get('boat'), nconf.get('yard')),

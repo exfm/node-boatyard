@@ -1,4 +1,4 @@
-# Boatyard
+![toot.](https://raw.github.com/exfm/node-boatyard/master/docs/images/logo.png)
 
 A helper for getting distributed Javascript jobs done with adhoc deploys.
 
