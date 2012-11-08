@@ -23,7 +23,7 @@
     "nconf": "0.6.4",
     "express": "3.0.x",
     "leveldb": "0.7.1",
-    "request": "2.11.4",
+    "superagent": "0.9.8",
     "underscore": "1.4.2"
   }
 }
