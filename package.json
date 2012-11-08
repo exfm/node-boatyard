@@ -22,9 +22,6 @@
     "winston": "0.6.2",
     "nconf": "0.6.4",
     "express": "3.0.x",
-    "jade": "0.27.5",
-    "socket.io": "0.9.10",
-    "browserify": "git://github.com/exfm/node-browserify",
     "leveldb": "0.7.1",
     "request": "2.11.4",
     "underscore": "1.4.2"

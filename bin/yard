@@ -325,10 +325,9 @@ cmds = {
     },
     'launch': function(){
         var client,
-            boatName = argv._[1],
             user = 'ubuntu',
-            remoteHome = '/home/ubuntu/boatyard/' + boatName,
             boat = configData,
+            remoteHome = '/home/ubuntu/boatyard/' + boat.name,
             c = [],
             allHosts = _.union(boat.mates, [boat.captain]),
             pkg = {
@@ -341,7 +340,11 @@ cmds = {
         sequence().then(function(next){
             next();
         }).then(function(next){
-            mkdir(user, boat.captain, remoteHome, next);
+            when.all(allHosts.map(function(host){
+                var d = when.defer();
+                mkdir(user, host, remoteHome, d.resolve);
+                return d.promise;
+            }), next);
 
         // scp partitioner
         }).then(function(next){
@@ -361,13 +364,13 @@ cmds = {
         // Create package.json on captain
         }).then(function(next){
             progress('Creating captain package.json');
-            pkg.name = "boatyard-" + boatName + "-captain";
+            pkg.name = "boatyard-" + boat.name + "-captain";
             putFile(user, boat.captain, JSON.stringify(pkg, null, 4), remoteHome + '/package.json', function(){
                 next();
             });
         }).then(function(next){
             progress('Creating package.json for mates');
-            pkg.name = "boatyard-" + boatName + "-mate";
+            pkg.name = "boatyard-" + boat.name + "-mate";
 
             when.all(boat.mates.map(function(mateHost){
                 var d = when.defer();
@@ -382,9 +385,11 @@ cmds = {
                 var d = when.defer(),
                     c = new SSHClient(user, host, function(){
                         c.exec('cd ' + remoteHome, function(){
-                            c.exec('npm install', function(){
-                                c.close();
-                                d.resolve(host);
+                            c.exec('sudo chown -R ubuntu:ubuntu /home/ubuntu/', function(){
+                                c.exec('npm install', function(){
+                                    c.close();
+                                    d.resolve(host);
+                                });
                             });
                         });
                     });
@@ -401,7 +406,7 @@ cmds = {
             when.all(boat.mates.map(function(mateHost){
                 var d = when.defer();
                 progress('Uploading to mate ' + mateHost);
-                scp(user, boat.captain, __dirname + "/mate",
+                scp(user, mateHost, __dirname + "/mate",
                     remoteHome + "/mate", d.resolve);
                 return d.promise;
             }), next);
@@ -459,6 +464,9 @@ cmds = {
         }).then(function(next){
             success("Boat is out at sea!");
         });
+    },
+    'ps': {
+        // list all processes this boat owns
     }
 };
 
