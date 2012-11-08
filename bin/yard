@@ -386,9 +386,11 @@ cmds = {
                     c = new SSHClient(user, host, function(){
                         c.exec('cd ' + remoteHome, function(){
                             c.exec('sudo chown -R ubuntu:ubuntu /home/ubuntu/', function(){
-                                c.exec('npm install', function(){
-                                    c.close();
-                                    d.resolve(host);
+                                c.exec('rm -rf ./node_modules/boatyard/', function(){
+                                    c.exec('npm install', function(){
+                                        c.close();
+                                        d.resolve(host);
+                                    });
                                 });
                             });
                         });
@@ -413,55 +415,55 @@ cmds = {
 
         // Wake the captain!
         }).then(function(next){
-            var c = new SSHClient(user, boat.captain, function(){
-                c.exec('cd ' + remoteHome, function(){
-                    var args = [
-                        '--size 100000',
-                        '--boat ' + boat.name,
-                        '--partitioner ' + remoteHome + '/partitioner.js'
-                    ];
-                    Object.keys(boat.stowaways).forEach(function(name){
-                        args.push('--' + name + ' ' + boat.stowaways[name]);
-                    });
+        //     var c = new SSHClient(user, boat.captain, function(){
+        //         c.exec('cd ' + remoteHome, function(){
+        //             var args = [
+        //                 '--size 100000',
+        //                 '--boat ' + boat.name,
+        //                 '--partitioner ' + remoteHome + '/partitioner.js'
+        //             ];
+        //             Object.keys(boat.stowaways).forEach(function(name){
+        //                 args.push('--' + name + ' ' + boat.stowaways[name]);
+        //             });
 
-                    c.exec('./captain '+ args.join(' ') +' > captain.log &', function(){
-                        progress('Captain awake at ' + boat.captain + '!');
-                        c.close();
-                        next();
-                    });
-                });
-            });
+        //             c.exec('./captain '+ args.join(' ') +' > captain.log &', function(){
+        //                 progress('Captain awake at ' + boat.captain + '!');
+        //                 c.close();
+        //                 next();
+        //             });
+        //         });
+        //     });
 
-        // Mates to arms!
-        }).then(function(next){
-            progress('Mates! To arms!');
+        // // Mates to arms!
+        // }).then(function(next){
+        //     progress('Mates! To arms!');
 
-            var args = [
-                '--captain ' + boat.captain,
-                '--boat ' + boat.name,
-                '--task ' + remoteHome + '/task.js'
-            ];
-            Object.keys(boat.stowaways).forEach(function(name){
-                args.push('--' + name + ' ' + boat.stowaways[name]);
-            });
+        //     var args = [
+        //         '--captain ' + boat.captain,
+        //         '--boat ' + boat.name,
+        //         '--task ' + remoteHome + '/task.js'
+        //     ];
+        //     Object.keys(boat.stowaways).forEach(function(name){
+        //         args.push('--' + name + ' ' + boat.stowaways[name]);
+        //     });
 
-            when.all(boat.mates.map(function(mateHost){
-                var mateArgs = args.slice(0),
-                    d = when.defer(),
-                    c = new SSHClient(user, mateHost, function(){
-                        c.exec('cd ' + remoteHome, function(){
-                            if(boat.hands.hasOwnProperty(mateHost)){
-                                mateArgs.push('--hands ' + boat.hands[mateHost]);
-                            }
-                            c.exec('./mate '+ mateArgs.join(' ') +' > mate.log &', function(){
-                                progress('Mate ' + mateHost + ' ready for battle!');
-                                c.close();
-                            });
-                        });
-                    });
-                return d.promise;
-            }), next);
-        }).then(function(next){
+        //     when.all(boat.mates.map(function(mateHost){
+        //         var mateArgs = args.slice(0),
+        //             d = when.defer(),
+        //             c = new SSHClient(user, mateHost, function(){
+        //                 c.exec('cd ' + remoteHome, function(){
+        //                     if(boat.hands.hasOwnProperty(mateHost)){
+        //                         mateArgs.push('--hands ' + boat.hands[mateHost]);
+        //                     }
+        //                     c.exec('./mate '+ mateArgs.join(' ') +' > mate.log &', function(){
+        //                         progress('Mate ' + mateHost + ' ready for battle!');
+        //                         c.close();
+        //                     });
+        //                 });
+        //             });
+        //         return d.promise;
+        //     }), next);
+        // }).then(function(next){
             success("Boat is out at sea!");
         });
     },
