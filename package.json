@@ -22,7 +22,6 @@
     "winston": "0.6.2",
     "nconf": "0.6.4",
     "express": "3.0.x",
-    "leveldb": "0.7.1",
     "superagent": "0.9.8",
     "underscore": "1.4.2"
   }
