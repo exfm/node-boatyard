@@ -23,7 +23,7 @@ nconf.defaults({
     'secret': 'awssecret'
 });
 
-var yard = require('../'),
+var yard = require('boatyard'),
     Mate = yard.Mate,
     Hand = yard.Hand,
     taskPath = path.resolve(nconf.get('task'));
