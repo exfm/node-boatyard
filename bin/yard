@@ -464,6 +464,7 @@ cmds = {
                             c.exec('./mate '+ mateArgs.join(' ') +' &', function(){
                                 progress('Mate ' + mateHost + ' ready for battle!');
                                 c.close();
+                                d.resolve(mateHost);
                             });
                         });
                     });
