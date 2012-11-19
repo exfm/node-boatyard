@@ -11,6 +11,8 @@ var optimist = require('optimist'),
     util = require('util'),
     EventEmitter = require('events').EventEmitter,
     when = require('when'),
+    aws = require('plata'),
+    request = require('superagent'),
     _ = require('underscore'),
     cmd,
     cmds,
@@ -323,152 +325,8 @@ cmds = {
         saveConfig();
         success("Mate " + mateHost + " will manage " + numHands + " on boat " + boatName + "!");
     },
+
     'launch': function(){
-        var client,
-            user = 'ubuntu',
-            boat = configData,
-            remoteHome = '/home/ubuntu/boatyard/' + boat.name,
-            c = [],
-            allHosts = _.union(boat.mates, [boat.captain]),
-            pkg = {
-                'name': '',
-                'version': '0.0.0',
-                'dependencies': boat.dependencies,
-                'boat': boat
-            };
-
-        sequence().then(function(next){
-            next();
-        }).then(function(next){
-            when.all(allHosts.map(function(host){
-                var d = when.defer();
-                mkdir(user, host, remoteHome, d.resolve);
-                return d.promise;
-            }), next);
-
-        // scp partitioner
-        }).then(function(next){
-            progress('Uploading partitioner');
-            scp(user, boat.captain, boat.partitioner, remoteHome + '/partitioner.js', next);
-
-        // scp task
-        }).then(function(next){
-            progress('Uploading task');
-            when.all(boat.mates.map(function(mateHost){
-                var d = when.defer();
-                progress('Uploading to mate ' + mateHost);
-                scp(user, mateHost, boat.task, remoteHome + '/task.js', d.resolve);
-                return d.promise;
-            }), next);
-
-        // Create package.json on captain
-        }).then(function(next){
-            progress('Creating captain package.json');
-            pkg.name = "boatyard-" + boat.name + "-captain";
-            putFile(user, boat.captain, JSON.stringify(pkg, null, 4), remoteHome + '/package.json', function(){
-                next();
-            });
-        }).then(function(next){
-            progress('Creating package.json for mates');
-            pkg.name = "boatyard-" + boat.name + "-mate";
-
-            when.all(boat.mates.map(function(mateHost){
-                var d = when.defer();
-                progress('Uploading to mate ' + mateHost);
-                putFile(user, mateHost, JSON.stringify(pkg, null, 4), remoteHome + '/package.json', d.resolve);
-                return d.promise;
-            }), next);
-
-        // Install packages
-        }).then(function(next){
-            when.all(allHosts.map(function(host){
-                var d = when.defer(),
-                    c = new SSHClient(user, host, function(){
-                        c.exec('cd ' + remoteHome, function(){
-                            c.exec('sudo chown -R ubuntu:ubuntu /home/ubuntu/', function(){
-                                c.exec('rm -rf ./node_modules/boatyard/', function(){
-                                    c.exec('npm install', function(){
-                                        c.close();
-                                        d.resolve(host);
-                                    });
-                                });
-                            });
-                        });
-                    });
-                return d.promise;
-            }), next);
-
-        // Put captain executable
-        }).then(function(next){
-            scp(user, boat.captain, __dirname + "/captain",
-                remoteHome + "/captain", next);
-
-        // Put the mate executable
-        }).then(function(next){
-            when.all(boat.mates.map(function(mateHost){
-                var d = when.defer();
-                progress('Uploading to mate ' + mateHost);
-                scp(user, mateHost, __dirname + "/mate",
-                    remoteHome + "/mate", d.resolve);
-                return d.promise;
-            }), next);
-
-        // Wake the captain!
-        }).then(function(next){
-            var c = new SSHClient(user, boat.captain, function(){
-                c.exec('cd ' + remoteHome, function(){
-                    var args = [
-                        '--size 100000',
-                        '--boat ' + boat.name,
-                        '--partitioner ' + remoteHome + '/partitioner.js'
-                    ];
-                    Object.keys(boat.stowaways).forEach(function(name){
-                        args.push('--' + name + ' ' + boat.stowaways[name]);
-                    });
-
-                    c.exec('./captain '+ args.join(' ') +' > captain.log &', function(){
-                        progress('Captain awake at ' + boat.captain + '!');
-                        c.close();
-                        next();
-                    });
-                });
-            });
-
-        // Mates to arms!
-        }).then(function(next){
-            progress('Mates! To arms!');
-
-            var args = [
-                '--captain ' + boat.captain,
-                '--boat ' + boat.name,
-                '--task ' + remoteHome + '/task.js'
-            ];
-            Object.keys(boat.stowaways).forEach(function(name){
-                args.push('--' + name + ' ' + boat.stowaways[name]);
-            });
-
-            when.all(boat.mates.map(function(mateHost){
-                var mateArgs = args.slice(0),
-                    d = when.defer(),
-                    c = new SSHClient(user, mateHost, function(){
-                        c.exec('cd ' + remoteHome, function(){
-                            if(boat.hands.hasOwnProperty(mateHost)){
-                                mateArgs.push('--hands ' + boat.hands[mateHost]);
-                            }
-                            c.exec('./mate '+ mateArgs.join(' ') +' > mate.log &', function(){
-                                progress('Mate ' + mateHost + ' ready for battle!');
-                                c.close();
-                            });
-                        });
-                    });
-                return d.promise;
-            }), next);
-        }).then(function(next){
-            success("Boat is out at sea!");
-        });
-    },
-
-    'sqs': function(){
         function install(host, remoteHome){
             var d = when.defer(),
                 c = new SSHClient(user, host, function(){
@@ -498,13 +356,17 @@ cmds = {
                 'version': '0.0.0',
                 'dependencies': boat.dependencies,
                 'boat': boat
-            };
+            },
+            key = boat.stowaways.key,
+            secret = boat.stowaways.secret,
+            queueName = boat.stowaways['queue-name'];
+
+        aws.connect({'key': key, 'secret': secret});
 
         sequence()
         // Upload the partitioner.
         .then(function(next){
             progress('Uploading partitioner');
-
             scp(user, boat.captain, boat.partitioner, remoteHome + '/partitioner.js', next);
 
         // Create package.json on captain
@@ -584,7 +446,6 @@ cmds = {
         // handle redelivery.
         }).then(function(next){
             var args = [
-                '--captain ' + boat.captain,
                 '--boat ' + boat.name,
                 '--task ' + remoteHome + '/task.js'
             ];
@@ -608,14 +469,42 @@ cmds = {
                     });
                 return d.promise;
             }), next);
-        });
+
         // Keep printing the queue stats.
-
-        // When messages hits 0,
+        }).then(function(next){
+            var queue = aws.sqs.Queue(queueName),
+                t;
+            function waitForFinish(){
+                queue.getDetails().then(function(details){
+                    if(details.approximateNumberOfMessages === 0 &&
+                        details.approximateNumberOfMessagesNotVisible === 0 &&
+                        details.approximateNumberOfMessagesDelayed === 0){
+                        clearInterval(t);
+                        success('all done');
+                        next();
+                    }
+                    else {
+                        progress('Total: ' + details.approximateNumberOfMessages +
+                            'In Flight: ' + details.approximateNumberOfMessagesNotVisible +
+                            'Delayed: ' + details.approximateNumberOfMessagesDelayed);
+                    }
+                });
+            }
+            t = setInterval(waitForFinish, 10000);
         // send message to kill all mates and hands.
-
+        }).then(function(next){
+            when.all(allHosts.map(function(host){
+                var d = when.defer();
+                request.get('http://'+host+':10000/shutdown')
+                    .end(function(res){
+                        d.resolve(host);
+                    });
+                return d.promise;
+            }), next);
         // Exit process.
-
+        }).then(function(){
+            process.exit(0);
+        });
     }
 };
 
