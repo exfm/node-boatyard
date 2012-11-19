@@ -2,6 +2,7 @@
 
 var interval = null;
 module.exports = function(partition){
+    console.log('Simple task got arguments', arguments);
     var self = this,
         completed = 0,
         total = partition.stop - partition.start;
@@ -12,9 +13,6 @@ module.exports = function(partition){
             self.release();
             self.getWorkToDo();
             clearInterval(interval);
-        }
-        else{
-            self.progress(total, completed, 0, "Making sausages....");
         }
     }
     interval = setInterval(work, 100);

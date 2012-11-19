@@ -7,7 +7,6 @@ var os = require('os'),
     nconf = require('nconf'),
     cluster = require('cluster'),
     winston = require('winston'),
-    log = winston.loggers.get('boatyard'),
     hostname = os.hostname(),
     task = {};
 
@@ -18,13 +17,13 @@ nconf.argv()
 nconf.defaults({
     'captain': 'localhost',
     'hands': os.cpus().length,
-    'task': '../examples/task.js',
+    'task': './examples/simple/task.js',
     'queue-name': 'boatyard-queue',
     'key': 'awskey',
     'secret': 'awssecret'
 });
 
-var yard = require('boatyard'),
+var yard = require('../'),
     Mate = yard.Mate,
     Hand = yard.Hand,
     taskPath = path.resolve(nconf.get('task'));
@@ -37,7 +36,6 @@ if (cluster.isMaster){
 }
 else {
     new Hand(hostname).getToWork(function(msg){
-        log.silly('Working on partition ', msg);
-        task.apply(this, [msg.partition]);
+        task.apply(this, [msg]);
     });
 }

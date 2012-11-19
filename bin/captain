@@ -4,9 +4,8 @@
 
 var nconf = require('nconf'),
     path = require('path'),
-    yard = require('boatyard'),
-    Captain = yard.Captain,
-    Boat = yard.Boat;
+    yard = require('../'),
+    Captain = yard.Captain;
 
 nconf.argv()
     .env()
@@ -14,7 +13,7 @@ nconf.argv()
 
 nconf.defaults({
     'size': 100000,
-    'partitioner': '../examples/partitioner.js',
+    'partitioner': './examples/simple/partitioner.js',
     'boat': 'example-partitioner',
     'queue-name': 'boatyard-queue',
     'key': 'awskey',
