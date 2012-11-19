@@ -18,7 +18,10 @@ nconf.argv()
 nconf.defaults({
     'captain': 'localhost',
     'hands': os.cpus().length,
-    'task': '../examples/task.js'
+    'task': '../examples/task.js',
+    'queue-name': 'boatyard-queue',
+    'key': 'awskey',
+    'secret': 'awssecret'
 });
 
 var yard = require('boatyard'),
@@ -29,7 +32,7 @@ var yard = require('boatyard'),
 task = require(taskPath);
 
 if (cluster.isMaster){
-    new Mate(hostname, nconf.get('captain'), Number(nconf.get('hands')))
+    new Mate(hostname, nconf)
         .allHandsOnDeck();
 }
 else {
