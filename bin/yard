@@ -408,6 +408,7 @@ cmds = {
 
         // Upload the task to all hosts
         // }).then(function(next){
+        // .then(function(next){
 
         //     when.all(allHosts.map(function(host){
         //         var d = when.defer();
@@ -512,7 +513,7 @@ cmds = {
             t = setInterval(waitForFinish, 10000);
         // send message to kill all mates and hands.
         }).then(function(next){
-            when.all(allHosts.map(function(host){
+            when.all(boat.mates.map(function(host){
                 var d = when.defer();
                 request.get('http://'+host+':10000/shutdown')
                     .end(function(res){
