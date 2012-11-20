@@ -366,48 +366,48 @@ cmds = {
 
         sequence()
         // Upload the partitioner.
-        .then(function(next){
-            progress('Uploading partitioner');
-            scp(user, boat.captain, boat.partitioner, remoteHome + '/partitioner.js', next);
+        // .then(function(next){
+        //     progress('Uploading partitioner');
+        //     scp(user, boat.captain, boat.partitioner, remoteHome + '/partitioner.js', next);
 
-        // Create package.json on captain
-        }).then(function(next){
-            progress('Creating captain package.json');
-            pkg.name = "boatyard-" + boat.name + "-captain";
-            putFile(user, boat.captain, JSON.stringify(pkg, null, 4), remoteHome + '/package.json', function(){
-                next();
-            });
+        // // Create package.json on captain
+        // }).then(function(next){
+        //     progress('Creating captain package.json');
+        //     pkg.name = "boatyard-" + boat.name + "-captain";
+        //     putFile(user, boat.captain, JSON.stringify(pkg, null, 4), remoteHome + '/package.json', function(){
+        //         next();
+        //     });
 
-        // Install packages
-        }).then(function(next){
-            install(boat.captain, remoteHome).then(next);
-        // Put captain executable
-        }).then(function(next){
-            scp(user, boat.captain, __dirname + "/captain",
-                remoteHome + "/captain", next);
-        // Run partitioner that puts everything on an SQS queue.
-        }).then(function(next){
-            var c = new SSHClient(user, boat.captain, function(){
-                c.exec('cd ' + remoteHome, function(){
-                    var args = [
-                        '--size 100000',
-                        '--boat ' + boat.name,
-                        '--partitioner ' + remoteHome + '/partitioner.js'
-                    ];
-                    Object.keys(boat.stowaways).forEach(function(name){
-                        args.push('--' + name + ' ' + boat.stowaways[name]);
-                    });
+        // // Install packages
+        // }).then(function(next){
+        //     install(boat.captain, remoteHome).then(next);
+        // // Put captain executable
+        // }).then(function(next){
+        //     scp(user, boat.captain, __dirname + "/captain",
+        //         remoteHome + "/captain", next);
+        // // Run partitioner that puts everything on an SQS queue.
+        // }).then(function(next){
+        //     var c = new SSHClient(user, boat.captain, function(){
+        //         c.exec('cd ' + remoteHome, function(){
+        //             var args = [
+        //                 '--size 100000',
+        //                 '--boat ' + boat.name,
+        //                 '--partitioner ' + remoteHome + '/partitioner.js'
+        //             ];
+        //             Object.keys(boat.stowaways).forEach(function(name){
+        //                 args.push('--' + name + ' ' + boat.stowaways[name]);
+        //             });
 
-                    c.exec('./captain '+ args.join(' '), function(){
-                        progress('Partitioner finished!');
-                        c.close();
-                        next();
-                    });
-                });
-            });
+        //             c.exec('./captain '+ args.join(' '), function(){
+        //                 progress('Partitioner finished!');
+        //                 c.close();
+        //                 next();
+        //             });
+        //         });
+        //     });
 
         // Upload the task to all hosts
-        }).then(function(next){
+        .then(function(next){
             progress('Uploading task');
             when.all(allHosts.map(function(mateHost){
                 var d = when.defer();
