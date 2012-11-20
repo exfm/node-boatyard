@@ -26,7 +26,8 @@ nconf.defaults({
 var yard = require('boatyard'),
     Mate = yard.Mate,
     Hand = yard.Hand,
-    taskPath = path.resolve(nconf.get('task'));
+    taskPath = path.resolve(nconf.get('task')),
+    log = winston.loggers.get('mate');
 
 task = require(taskPath);
 
@@ -36,6 +37,7 @@ if (cluster.isMaster){
 }
 else {
     new Hand(hostname).getToWork(function(msg){
+        log.info('Getting to work on message', msg);
         task.apply(this, [msg]);
     });
 }
