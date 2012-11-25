@@ -25,6 +25,6 @@
     "superagent": "0.9.8",
     "underscore": "1.4.2",
     "optimist": "0.3.5",
-    "plata": "0.0.14"
+    "plata": "0.0.15"
   }
 }
